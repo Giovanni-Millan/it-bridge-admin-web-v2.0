@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { updateRows } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faLock, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
@@ -75,7 +76,7 @@ export default function Candados() {
 
     if (!result.isConfirmed) return;
 
-    const { error } = await supabaseAdmin.from(registro.tabla_origen).update({ bloqueada: false }).eq("id", registro.id);
+    const { error } = await updateRows(registro.tabla_origen, "id", registro.id, { bloqueada: false });
 
     if (error) {
       Swal.fire("Error", "No se pudo desbloquear la calificación.", "error");

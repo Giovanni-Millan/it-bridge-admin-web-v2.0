@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { insertRows, updateRows, deleteRows } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -206,7 +207,7 @@ export default function DetalleGrupo() {
       id_alumno,
     }));
 
-    const { error } = await supabaseAdmin.from("grupo_alumnos").insert(filas);
+    const { error } = await insertRows("grupo_alumnos", filas);
 
     if (error) {
       Swal.fire("Error", "No se pudieron agregar los alumnos seleccionados.", "error");
@@ -237,7 +238,7 @@ export default function DetalleGrupo() {
 
     if (!result.isConfirmed) return;
 
-    const { error } = await supabaseAdmin.from("grupo_alumnos").delete().eq("id", relacion.id);
+    const { error } = await deleteRows("grupo_alumnos", "id", relacion.id);
 
     if (error) {
       Swal.fire("Error", "No se pudo quitar al alumno.", "error");
@@ -277,9 +278,9 @@ export default function DetalleGrupo() {
       return;
     }
 
-    const { error } = await supabaseAdmin
-      .from("grupo_profesores")
-      .insert([{ id_grupo: Number(id_grupo), id_profesor, materia }]);
+    const { error } = await insertRows("grupo_profesores", [
+      { id_grupo: Number(id_grupo), id_profesor, materia },
+    ]);
 
     if (error) {
       const mensaje = error.code === "23505"
@@ -313,7 +314,7 @@ export default function DetalleGrupo() {
 
     if (!result.isConfirmed) return;
 
-    const { error } = await supabaseAdmin.from("grupo_profesores").delete().eq("id", relacion.id);
+    const { error } = await deleteRows("grupo_profesores", "id", relacion.id);
 
     if (error) {
       Swal.fire("Error", "No se pudo quitar al profesor.", "error");
@@ -348,10 +349,7 @@ export default function DetalleGrupo() {
       return;
     }
 
-    const { error } = await supabaseAdmin
-      .from("grupo_profesores")
-      .update({ materia })
-      .eq("id", rel.id);
+    const { error } = await updateRows("grupo_profesores", "id", rel.id, { materia });
 
     if (error) {
       const mensaje = error.code === "23505"

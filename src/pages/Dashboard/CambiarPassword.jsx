@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
 import Swal from "sweetalert2";
-import { supabaseAdmin } from "../../components/supabaseClient.js";
+import { listUsers, updateUserById } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -31,10 +31,7 @@ export default function Usuarios() {
     try {
 
       const { data, error } =
-        await supabaseAdmin
-          .auth
-          .admin
-          .listUsers();
+        await listUsers();
 
       if (error) throw error;
 
@@ -147,16 +144,13 @@ export default function Usuarios() {
           data,
           error
         } =
-          await supabaseAdmin
-            .auth
-            .admin
-            .updateUserById(
-              usuario.id,
-              {
-                password:
-                  nuevaPassword
-              }
-            );
+          await updateUserById(
+            usuario.id,
+            {
+              password:
+                nuevaPassword
+            }
+          );
 
         console.log(
           "Respuesta:",

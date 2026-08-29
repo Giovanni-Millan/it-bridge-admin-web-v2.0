@@ -5,7 +5,8 @@
   import Navbar from "../../../components/Navbar";
   import Avatar from "../../../components/Avatar.jsx";
   import Swal from "sweetalert2";
-  import { supabase, supabaseAdmin } from "../../../components/supabaseClient.js";
+  import { supabase } from "../../../components/supabaseClient.js";
+  import { getUserById, updateUserById } from "../../../components/adminApi";
   import { subirAvatar, eliminarAvatar } from "../../../utils/avatarUpload.js";
 
   export default function ModificarInfoAlumno() {
@@ -126,7 +127,7 @@
 
         setFotoUrl(data.foto_url || null);
 
-        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(id);
+        const { data: authData } = await getUserById(id);
         setActivo(!authData?.user?.banned_until || new Date(authData.user.banned_until) < new Date());
 
       };
@@ -199,7 +200,7 @@
 
       try {
 
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        const { error } = await updateUserById(id, {
           ban_duration: activo ? "87600h" : "none",
         });
 

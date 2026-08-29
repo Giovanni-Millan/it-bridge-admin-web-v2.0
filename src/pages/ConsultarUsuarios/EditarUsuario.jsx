@@ -5,7 +5,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import Avatar from "../../components/Avatar.jsx";
 import Swal from "sweetalert2";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { getUserById, updateUserById, updateRows } from "../../components/adminApi";
 import { subirAvatar } from "../../utils/avatarUpload.js";
 
 const CONFIG_POR_ROL = {
@@ -66,7 +67,7 @@ export default function EditarUsuario() {
 
       setFotoUrl(data.foto_url || null);
 
-      const { data: authData } = await supabaseAdmin.auth.admin.getUserById(id);
+      const { data: authData } = await getUserById(id);
       setActivo(!authData?.user?.banned_until || new Date(authData.user.banned_until) < new Date());
 
       setCargando(false);
@@ -107,7 +108,7 @@ export default function EditarUsuario() {
 
     try {
 
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
+      const { error } = await updateUserById(id, {
         ban_duration: activo ? "87600h" : "none",
       });
 
@@ -156,19 +157,19 @@ export default function EditarUsuario() {
         payload.telefono = form.telefono || null;
       }
 
-      const { error } = await supabaseAdmin.from(config.tabla).update(payload).eq("id", id);
+      const { error } = await updateRows(config.tabla, "id", id, payload);
 
       if (error) throw error;
 
       if (form.contraseña) {
-        const { error: passError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        const { error: passError } = await updateUserById(id, {
           password: form.contraseña,
         });
         if (passError) throw passError;
       }
 
       if (form.correo) {
-        await supabaseAdmin.auth.admin.updateUserById(id, { email: form.correo });
+        await updateUserById(id, { email: form.correo });
       }
 
       Swal.fire("Actualizado", "Los datos se actualizaron correctamente", "success");

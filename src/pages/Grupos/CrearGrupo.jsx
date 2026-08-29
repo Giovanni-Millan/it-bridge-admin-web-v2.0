@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { insertRows, updateRows } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -117,22 +118,17 @@ export default function CrearGrupo() {
       let idDestino = id_grupo;
 
       if (modoEdicion) {
-        const { error } = await supabaseAdmin
-          .from("grupos")
-          .update(payload)
-          .eq("id_grupo", id_grupo);
+        const { error } = await updateRows("grupos", "id_grupo", id_grupo, payload);
 
         if (error) throw new Error(error.message);
       } else {
         const { data: userData } = await supabase.auth.getUser();
-        const { data, error } = await supabaseAdmin
-          .from("grupos")
-          .insert([{ ...payload, created_by: userData?.user?.id ?? null }])
-          .select()
-          .single();
+        const { data, error } = await insertRows("grupos", [
+          { ...payload, created_by: userData?.user?.id ?? null },
+        ]);
 
         if (error) throw new Error(error.message);
-        idDestino = data.id_grupo;
+        idDestino = data[0].id_grupo;
       }
 
       Swal.fire({

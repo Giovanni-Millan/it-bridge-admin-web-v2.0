@@ -19,7 +19,8 @@ import {
 
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2'
-import { supabase, supabaseAdmin } from '../../components/supabaseClient.js';
+import { supabase } from '../../components/supabaseClient.js';
+import { updateRows } from '../../components/adminApi';
 
 export default function Dashboard() {
 
@@ -180,10 +181,9 @@ export default function Dashboard() {
     const nuevoValor = !capturaHabilitada;
     setActualizandoCaptura(true);
 
-    const { error } = await supabaseAdmin
-      .from('configuracion_sistema')
-      .update({ captura_calificaciones_habilitada: nuevoValor })
-      .eq('id', 1);
+    const { error } = await updateRows('configuracion_sistema', 'id', 1, {
+      captura_calificaciones_habilitada: nuevoValor,
+    });
 
     setActualizandoCaptura(false);
 

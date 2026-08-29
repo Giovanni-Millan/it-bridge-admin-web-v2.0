@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
-import { supabaseAdmin } from "../../components/supabaseClient.js";
+import { createUser, insertRows } from "../../components/adminApi";
 
 // Quita acentos y cualquier caracter que no sea letra, todo en minúsculas
 const normalizarTexto = (texto) =>
@@ -59,18 +59,17 @@ export default function InscribirPsicologo() {
 
     try {
       const { data: userData, error: authError } =
-        await supabaseAdmin.auth.admin.createUser({
+        await createUser({
           email: formData.correo,
           password: formData.contraseña,
-          email_confirm: true,
-          app_metadata: { rol: "psicologo" },
+          rol: "psicologo",
         });
 
       if (authError) throw new Error(authError.message);
 
       const userId = userData.user.id;
 
-      const { error: psicologoError } = await supabaseAdmin.from("psicologos").insert([
+      const { error: psicologoError } = await insertRows("psicologos", [
         {
           id: userId,
           nombre: formData.nombre,

@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import Swal from "sweetalert2";
-import { supabaseAdmin } from "../../components/supabaseClient.js";
+import { createUser, insertRows } from "../../components/adminApi";
 
 // Quita acentos y cualquier caracter que no sea letra, todo en minúsculas
 const normalizarTexto = (texto) =>
@@ -62,11 +62,10 @@ export default function InscribirProfesor() {
     try {
       /* 1. Crear usuario en Auth */
       const { data: userData, error: authError } =
-        await supabaseAdmin.auth.admin.createUser({
+        await createUser({
           email: formData.correo,
           password: formData.contraseña,
-          email_confirm: true,
-          app_metadata: { rol: "docente" },
+          rol: "docente",
         });
 
       if (authError) throw new Error(authError.message);
@@ -74,7 +73,7 @@ export default function InscribirProfesor() {
       const userId = userData.user.id;
 
       /* 2. Insertar en tabla profesores */
-      const { error: profesorError } = await supabaseAdmin.from("profesores").insert([
+      const { error: profesorError } = await insertRows("profesores", [
         {
           id: userId,
           nombre: formData.nombre,

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { updateRows, updateRowsWhere } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faLock, faLockOpen, faFilePdf, faFileExcel } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useParams } from "react-router-dom";
@@ -117,7 +118,7 @@ export default function CalificacionesGrupoMateria() {
 
     if (!result.isConfirmed) return;
 
-    const { error } = await supabaseAdmin.from(tabla).update({ bloqueada: bloquear }).eq("id", registro.id);
+    const { error } = await updateRows(tabla, "id", registro.id, { bloqueada: bloquear });
 
     if (error) {
       Swal.fire("Error", `No se pudo ${bloquear ? "bloquear" : "desbloquear"} la calificación.`, "error");
@@ -153,22 +154,28 @@ export default function CalificacionesGrupoMateria() {
 
     let error;
     if (esBachillerato) {
-      ({ error } = await supabaseAdmin
-        .from("calificaciones_parciales")
-        .update({ bloqueada: true })
-        .eq("id_grupo", id_grupo)
-        .eq("materia", materiaDecoded)
-        .eq("bloqueada", false));
+      ({ error } = await updateRowsWhere(
+        "calificaciones_parciales",
+        [
+          { column: "id_grupo", value: id_grupo },
+          { column: "materia", value: materiaDecoded },
+          { column: "bloqueada", value: false },
+        ],
+        { bloqueada: true }
+      ));
     } else {
       const correos = filas.map((f) => f.alumno?.correo).filter(Boolean);
       if (correos.length === 0) return;
-      ({ error } = await supabaseAdmin
-        .from("calificaciones")
-        .update({ bloqueada: true })
-        .eq("materia", materiaDecoded)
-        .eq("id_grupo", id_grupo)
-        .eq("bloqueada", false)
-        .in("correo", correos));
+      ({ error } = await updateRowsWhere(
+        "calificaciones",
+        [
+          { column: "materia", value: materiaDecoded },
+          { column: "id_grupo", value: id_grupo },
+          { column: "bloqueada", value: false },
+        ],
+        { bloqueada: true },
+        { column: "correo", values: correos }
+      ));
     }
 
     if (error) {

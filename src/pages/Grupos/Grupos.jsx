@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { deleteRows } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -57,10 +58,7 @@ export default function Grupos() {
 
     if (!result.isConfirmed) return;
 
-    const { error } = await supabaseAdmin
-      .from("grupos")
-      .delete()
-      .eq("id_grupo", grupo.id_grupo);
+    const { error } = await deleteRows("grupos", "id_grupo", grupo.id_grupo);
 
     if (error) {
       Swal.fire("Error", "No se pudo eliminar el grupo.", "error");

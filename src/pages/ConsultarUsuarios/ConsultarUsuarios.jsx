@@ -10,7 +10,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { listUsers, updateUserById } from "../../components/adminApi";
 import Avatar from "../../components/Avatar.jsx";
 
 const ROLES = [
@@ -54,7 +55,7 @@ export default function ConsultarUsuarios() {
     // Estado de acceso (activo/baneado) viene de Auth, no de las tablas de rol.
     const bannedMap = {};
     try {
-      const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const { data: authData } = await listUsers();
       (authData?.users || []).forEach((u) => {
         bannedMap[u.id] = !!u.banned_until && new Date(u.banned_until) > new Date();
       });
@@ -119,7 +120,7 @@ export default function ConsultarUsuarios() {
     if (!result.isConfirmed) return;
 
     try {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(usuario.id, {
+      const { error } = await updateUserById(usuario.id, {
         ban_duration: usuario.activo ? "87600h" : "none",
       });
       if (error) throw error;

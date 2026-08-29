@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
-import { supabase, supabaseAdmin } from "../../components/supabaseClient.js";
+import { supabase } from "../../components/supabaseClient.js";
+import { insertRows, deleteRows } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faPlus, faTrash, faSearch, faBook } from "@fortawesome/free-solid-svg-icons";
 import { Link } from "react-router-dom";
@@ -85,9 +86,7 @@ export default function Materias() {
     }
 
     setGuardando(true);
-    const { error } = await supabaseAdmin
-      .from("materias")
-      .insert([{ nombre, area: areaSeleccionada }]);
+    const { error } = await insertRows("materias", [{ nombre, area: areaSeleccionada }]);
     setGuardando(false);
 
     if (error) {
@@ -116,7 +115,7 @@ export default function Materias() {
 
     if (!result.isConfirmed) return;
 
-    const { error } = await supabaseAdmin.from("materias").delete().eq("id_materia", materia.id_materia);
+    const { error } = await deleteRows("materias", "id_materia", materia.id_materia);
 
     if (error) {
       Swal.fire("Error", "No se pudo quitar la materia del catálogo.", "error");
