@@ -1,3 +1,4 @@
+import Swal from "sweetalert2";
 import { supabase } from "./supabaseClient.js";
 
 /*
@@ -7,7 +8,8 @@ import { supabase } from "./supabaseClient.js";
  * Cada función manda la sesión del admin logueado (su access_token, no la
  * service role key) a la función, que valida que sea admin de verdad y
  * ejecuta la operación del lado del servidor. Ver bridge-admin-web/README.md
- * y la Edge Function `admin-api` en el proyecto de Supabase.
+ * y la Edge Function `admin-api` en el proyecto de Supabase (versionada en
+ * bridge-admin-web/supabase/functions/admin-api/index.ts).
  *
  * Las formas de respuesta ({ data, error }) se mantienen lo más parecidas
  * posible a las de supabase-js para que el código que ya existía en
@@ -16,6 +18,32 @@ import { supabase } from "./supabaseClient.js";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api`;
 
+// A los cuántos ms de espera avisamos "esto está tardando más de lo normal"
+// (cold start típico de una Edge Function) sin cancelar la petición todavía.
+const SLOW_WARNING_MS = 8000;
+
+// A los cuántos ms cancelamos la petición si sigue sin responder.
+const TIMEOUT_MS = 20000;
+
+let toastVisible = false;
+
+function avisarLento() {
+  if (toastVisible) return;
+  toastVisible = true;
+  Swal.fire({
+    toast: true,
+    position: "top-end",
+    icon: "info",
+    title: "Esto está tardando más de lo normal…",
+    showConfirmButton: false,
+    timer: 4000,
+    timerProgressBar: true,
+    didClose: () => {
+      toastVisible = false;
+    },
+  });
+}
+
 async function call(action, payload) {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData?.session?.access_token;
@@ -23,6 +51,10 @@ async function call(action, payload) {
   if (!token) {
     return { data: null, error: { message: "No hay sesión activa" } };
   }
+
+  const controller = new AbortController();
+  const slowTimer = setTimeout(avisarLento, SLOW_WARNING_MS);
+  const timeoutTimer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   let res;
   try {
@@ -34,9 +66,21 @@ async function call(action, payload) {
         apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ action, payload }),
+      signal: controller.signal,
     });
   } catch (networkErr) {
-    return { data: null, error: { message: networkErr.message || "Error de red" } };
+    const timedOut = networkErr.name === "AbortError";
+    return {
+      data: null,
+      error: {
+        message: timedOut
+          ? "La operación tardó demasiado y se canceló. Intenta de nuevo."
+          : networkErr.message || "Error de red",
+      },
+    };
+  } finally {
+    clearTimeout(slowTimer);
+    clearTimeout(timeoutTimer);
   }
 
   const body = await res.json().catch(() => ({}));
