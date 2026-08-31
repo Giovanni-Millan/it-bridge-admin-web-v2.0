@@ -128,7 +128,6 @@ import ModificarInfoAlumno from './pages/ConsultarUsuarios/Calificaciones/Modifi
 import SubirCalificaciones from './pages/ConsultarUsuarios/Calificaciones/SubirCalificaciones'
 import Login from './pages/Login/Login'
 import ModificarCalificacion from './pages/ConsultarUsuarios/Calificaciones/ModificarCalificacion'
-import PruebaForm from './pages/prueba/PruebaForm'
 import GruposPorCarrera from './pages/actualizarinfo/GruposPorCarrera.jsx';
 import AlumnosPorGrupo from './pages/actualizarinfo/AlumnosPorGrupo.jsx';
 
@@ -313,7 +312,6 @@ function App() {
 />
         <Route path='/SubirCalificacionesAlumno/:id' Component={SubirCalificaciones}/>
         <Route path='/ModificarCalificacion/:id' Component={ModificarCalificacion}/>
-        <Route path='/Form' Component={PruebaForm}/>
 
 
 

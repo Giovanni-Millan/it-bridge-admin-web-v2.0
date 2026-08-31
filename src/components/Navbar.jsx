@@ -5,7 +5,6 @@ import { faArrowRightFromBracket } from '@fortawesome/free-solid-svg-icons';
 
 
 import logo from '../assets/logo.png'
-import { auth } from './firebase';
 
 
 export default function Navbar(props) {
