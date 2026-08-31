@@ -19,6 +19,23 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// CORS: bridge-admin-web corre en el navegador (Netlify), así que toda
+// respuesta —incluida la de error— necesita estos headers, y el preflight
+// OPTIONS que manda el navegador antes de cada POST debe responderse aparte,
+// sin pasar por la validación de admin de abajo (el navegador nunca manda
+// Authorization en el preflight). La autenticación real la hace esta misma
+// función más abajo (auth.getUser + app_metadata.rol === "admin"), por eso
+// esta función se despliega con verify_jwt=false: si se dejara el gate de
+// JWT de la plataforma encendido, el propio preflight OPTIONS (sin
+// Authorization) se rechazaría con 401 antes de llegar a este código, y esa
+// respuesta de la plataforma tampoco trae headers de CORS — eso es
+// exactamente el error de CORS que se vio en producción.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 // Tablas que esta función tiene permitido tocar. Cualquier otra —incluidas
 // las backup_20260819_* o cualquier tabla nueva que se agregue después— se
 // rechaza aunque el request esté autenticado como admin.
@@ -52,11 +69,15 @@ const ROLES_CREABLES = new Set(["alumno", "docente", "psicologo"]);
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   });
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
 
   const authHeader = req.headers.get("Authorization") || "";
