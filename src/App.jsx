@@ -118,7 +118,7 @@ import Modificar_trabajo_social_virtual from './pages/ConsultarUsuarios/Grupos/v
 import Modificar_industrial_virtual from './pages/ConsultarUsuarios/Grupos/virtual/Modificar_industrial_virtual.jsx'
 
 import CarrerasGrupos from "./pages/carreras/CarrerasGrupos";
-import AlumnosPorCarrera from "./pages/Carreras/AlumnosPorCarrera";
+import AlumnosPorCarrera from "./pages/carreras/AlumnosPorCarrera";
 
 
 
