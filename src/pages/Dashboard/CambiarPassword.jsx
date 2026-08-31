@@ -114,15 +114,13 @@ export default function Usuarios() {
             (value) => {
 
               if (!value) {
-                return
-                  "Debes escribir una contraseña";
+                return "Debes escribir una contraseña";
               }
 
               if (
                 value.length < 6
               ) {
-                return
-                  "Mínimo 6 caracteres";
+                return "Mínimo 6 caracteres";
               }
 
             }

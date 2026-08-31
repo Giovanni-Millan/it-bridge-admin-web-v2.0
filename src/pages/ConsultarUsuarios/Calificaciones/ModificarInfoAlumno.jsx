@@ -313,12 +313,6 @@
           plan_meses: tipo === "autoplaneado" && plan_meses ? parseInt(plan_meses) : null,
         };
 
-        if (contraseña) {
-
-          payload.contraseña = contraseña;
-
-        }
-
         const { error } = await supabase
           .from("alumnos")
           .update(payload)
@@ -335,6 +329,28 @@
           );
 
           return;
+
+        }
+
+        if (contraseña) {
+
+          const { error: passError } = await updateUserById(id, {
+            password: contraseña,
+          });
+
+          if (passError) {
+
+            console.error("Error al cambiar contraseña:", passError);
+
+            Swal.fire(
+              "Datos actualizados, pero la contraseña no se pudo cambiar",
+              passError.message,
+              "warning"
+            );
+
+            return;
+
+          }
 
         }
 
@@ -484,7 +500,19 @@
                 className="input-field"
               />
 
-
+              <div>
+                <input
+                  type="text"
+                  name="contraseña"
+                  value={alumno.contraseña}
+                  onChange={handleChange}
+                  placeholder="Nueva contraseña (opcional)"
+                  className="input-field w-full"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Déjalo vacío para no cambiar la contraseña actual.
+                </p>
+              </div>
 
               <input
                 type="text"
