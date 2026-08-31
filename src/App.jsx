@@ -4,6 +4,7 @@ import "./App.css";
 
 import Dashboard from './pages/Dashboard/Dashboard'
 import CambiarPassword from "./pages/Dashboard/CambiarPassword";
+import NotFound from './pages/NotFound/NotFound'
 import Candados from "./pages/Candados/Candados";
 import CrearAvisos from './pages/CrearAvisos/CrearAvisos'
 import InscribirAlumnos from './pages/InscribirAlumnos/InscribirAlumnos'
@@ -313,7 +314,7 @@ function App() {
         <Route path='/SubirCalificacionesAlumno/:id' Component={SubirCalificaciones}/>
         <Route path='/ModificarCalificacion/:id' Component={ModificarCalificacion}/>
 
-
+        <Route path='*' Component={NotFound}/>
 
       </Routes>
     </Router>
