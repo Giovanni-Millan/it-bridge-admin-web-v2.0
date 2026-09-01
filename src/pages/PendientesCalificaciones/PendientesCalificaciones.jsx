@@ -2,7 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { supabase } from "../../components/supabaseClient.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
+import {
+  faArrowLeft,
+  faMagnifyingGlass,
+  faChevronDown,
+  faChevronUp,
+  faUserGraduate,
+  faBook,
+} from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 
 const TIPOS = [
@@ -25,9 +32,9 @@ export default function PendientesCalificaciones() {
   const [loading, setLoading] = useState(true);
 
   const [busqueda, setBusqueda] = useState("");
-  const [profesorFiltro, setProfesorFiltro] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState("");
   const [periodoFiltro, setPeriodoFiltro] = useState("");
+  const [profesorExpandido, setProfesorExpandido] = useState(null);
 
   useEffect(() => {
     cargar();
@@ -113,9 +120,7 @@ export default function PendientesCalificaciones() {
   // porque "ENE-ABR" < "MAY-AGO" < "SEP-DIC" alfabéticamente coincide con
   // el orden cronológico del año).
   const periodos = useMemo(() => {
-    const set = new Set(
-      gruposTodos.map((g) => `${g.periodo} ${g.anio}`).filter((s) => s.trim())
-    );
+    const set = new Set(gruposTodos.map((g) => `${g.periodo} ${g.anio}`).filter((s) => s.trim()));
     return [...set].sort().reverse();
   }, [gruposTodos]);
 
@@ -125,12 +130,6 @@ export default function PendientesCalificaciones() {
     if (periodos.length > 0 && !periodoFiltro) setPeriodoFiltro(periodos[0]);
   }, [periodos]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const profesores = useMemo(() => {
-    const nombres = new Map();
-    pendientes.forEach((p) => nombres.set(p.id_profesor, p.profesorNombre));
-    return [...nombres.entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
-  }, [pendientes]);
-
   const filtrados = pendientes.filter((p) => {
     const termino = busqueda.trim().toLowerCase();
     const coincideTexto =
@@ -138,12 +137,51 @@ export default function PendientesCalificaciones() {
       p.alumnoNombre.toLowerCase().includes(termino) ||
       p.alumnoCorreo?.toLowerCase().includes(termino) ||
       p.materia.toLowerCase().includes(termino) ||
-      p.grupoNombre.toLowerCase().includes(termino);
-    const coincideProfesor = !profesorFiltro || p.id_profesor === profesorFiltro;
+      p.grupoNombre.toLowerCase().includes(termino) ||
+      p.profesorNombre.toLowerCase().includes(termino);
     const coincideTipo = !tipoFiltro || p.tipo === tipoFiltro;
     const coincidePeriodo = !periodoFiltro || `${p.periodo} ${p.anio}` === periodoFiltro;
-    return coincideTexto && coincideProfesor && coincideTipo && coincidePeriodo;
+    return coincideTexto && coincideTipo && coincidePeriodo;
   });
+
+  // Un renglón por profesor con pendientes (nada más), ordenado por quién
+  // tiene más huecos primero — es lo que más ayuda a priorizar a quién
+  // recordarle. Cada profesor trae ya armado su desglose por grupo+materia.
+  const porProfesor = useMemo(() => {
+    const mapa = new Map();
+
+    filtrados.forEach((p) => {
+      if (!mapa.has(p.id_profesor)) {
+        mapa.set(p.id_profesor, { id_profesor: p.id_profesor, profesorNombre: p.profesorNombre, items: [] });
+      }
+      mapa.get(p.id_profesor).items.push(p);
+    });
+
+    return [...mapa.values()]
+      .map((prof) => {
+        const porAsignacion = new Map();
+        prof.items.forEach((p) => {
+          const clave = `${p.id_grupo}|${p.materia}`;
+          if (!porAsignacion.has(clave)) {
+            porAsignacion.set(clave, {
+              clave,
+              materia: p.materia,
+              grupoNombre: p.grupoNombre,
+              carreraNombre: p.carreraNombre,
+              alumnos: [],
+            });
+          }
+          porAsignacion.get(clave).alumnos.push({ nombre: p.alumnoNombre, correo: p.alumnoCorreo });
+        });
+
+        return {
+          ...prof,
+          totalAlumnos: prof.items.length,
+          asignaciones: [...porAsignacion.values()].sort((a, b) => a.materia.localeCompare(b.materia, "es")),
+        };
+      })
+      .sort((a, b) => b.totalAlumnos - a.totalAlumnos);
+  }, [filtrados]);
 
   const resumen = useMemo(() => {
     const base = periodoFiltro ? pendientes.filter((p) => `${p.periodo} ${p.anio}` === periodoFiltro) : pendientes;
@@ -154,8 +192,11 @@ export default function PendientesCalificaciones() {
 
   const limpiarFiltros = () => {
     setBusqueda("");
-    setProfesorFiltro("");
     setTipoFiltro("");
+  };
+
+  const toggleProfesor = (id_profesor) => {
+    setProfesorExpandido((actual) => (actual === id_profesor ? null : id_profesor));
   };
 
   return (
@@ -174,8 +215,8 @@ export default function PendientesCalificaciones() {
         <div className="bg-white rounded-2xl shadow-md p-6 mb-6 border border-gray-100">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Pendientes de Calificaciones</h1>
           <p className="text-gray-500 mt-1">
-            Alumnos que ya están inscritos en un grupo con materia asignada a un profesor, pero que todavía no
-            tienen ninguna calificación capturada. Filtra por profesor, tipo o período, o busca por alumno/materia/grupo.
+            Profesores con alumnos sin calificación capturada. Haz clic en un profesor para ver el desglose por
+            grupo, materia y alumno.
           </p>
         </div>
 
@@ -203,25 +244,12 @@ export default function PendientesCalificaciones() {
             <FontAwesomeIcon icon={faMagnifyingGlass} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar alumno, materia o grupo..."
+              placeholder="Buscar profesor, alumno, materia o grupo..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-400 focus:border-transparent"
             />
           </div>
-
-          <select
-            value={profesorFiltro}
-            onChange={(e) => setProfesorFiltro(e.target.value)}
-            className="w-full py-2.5 px-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white"
-          >
-            <option value="">Todos los profesores</option>
-            {profesores.map(([id, nombre]) => (
-              <option key={id} value={id}>
-                {nombre}
-              </option>
-            ))}
-          </select>
 
           <select
             value={tipoFiltro}
@@ -250,7 +278,7 @@ export default function PendientesCalificaciones() {
             </select>
           )}
 
-          {(busqueda || profesorFiltro || tipoFiltro) && (
+          {(busqueda || tipoFiltro) && (
             <div className="md:col-span-4">
               <button onClick={limpiarFiltros} className="text-sm text-purple-600 hover:text-purple-800 font-medium">
                 Limpiar filtros
@@ -263,7 +291,7 @@ export default function PendientesCalificaciones() {
           <div className="flex justify-center items-center h-60">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
           </div>
-        ) : filtrados.length === 0 ? (
+        ) : porProfesor.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-md border border-dashed border-gray-200 p-10 text-center text-gray-500">
             {pendientes.length === 0 ? (
               <span className="text-green-700 font-medium">
@@ -274,32 +302,64 @@ export default function PendientesCalificaciones() {
             )}
           </div>
         ) : (
-          <div className="w-full overflow-x-auto rounded-2xl shadow-md bg-white">
-            <table className="w-full table-auto divide-y divide-gray-200">
-              <thead className="bg-purple-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Profesor</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Materia</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Grupo</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Carrera</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Alumno</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtrados.map((p) => (
-                  <tr key={p.clave} className="hover:bg-purple-50 transition">
-                    <td className="px-4 py-3 text-sm text-gray-900">{p.profesorNombre}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{p.materia}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{p.grupoNombre}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{p.carreraNombre}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      {p.alumnoNombre}
-                      <p className="text-xs text-gray-400">{p.alumnoCorreo}</p>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-col gap-3">
+            {porProfesor.map((prof) => {
+              const expandido = profesorExpandido === prof.id_profesor;
+
+              return (
+                <div key={prof.id_profesor} className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                  <button
+                    onClick={() => toggleProfesor(prof.id_profesor)}
+                    className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left hover:bg-purple-50 transition"
+                  >
+                    <div>
+                      <p className="font-semibold text-gray-800">{prof.profesorNombre}</p>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        {prof.asignaciones.length} materia{prof.asignaciones.length === 1 ? "" : "s"} con huecos ·{" "}
+                        {prof.totalAlumnos} alumno{prof.totalAlumnos === 1 ? "" : "s"} sin calificación
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-red-100 text-red-700 font-bold text-sm">
+                        {prof.totalAlumnos}
+                      </span>
+                      <FontAwesomeIcon icon={expandido ? faChevronUp : faChevronDown} className="text-gray-400" />
+                    </div>
+                  </button>
+
+                  {expandido && (
+                    <div className="border-t border-gray-100 bg-gray-50 px-6 py-4 flex flex-col gap-4">
+                      {prof.asignaciones.map((asig) => (
+                        <div key={asig.clave} className="bg-white rounded-xl border border-gray-200 p-4">
+                          <div className="flex items-center gap-2 mb-1">
+                            <FontAwesomeIcon icon={faBook} className="text-purple-500 text-sm" />
+                            <p className="font-semibold text-gray-800">{asig.materia}</p>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-3">
+                            {asig.grupoNombre} · {asig.carreraNombre}
+                          </p>
+
+                          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {asig.alumnos.map((al) => (
+                              <li
+                                key={al.correo}
+                                className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-1.5"
+                              >
+                                <FontAwesomeIcon icon={faUserGraduate} className="text-gray-400 text-xs" />
+                                <span>
+                                  {al.nombre}
+                                  <span className="text-gray-400"> — {al.correo}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
