@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { supabase } from "../../components/supabaseClient.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -14,10 +14,13 @@ import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Swal from "sweetalert2";
-// xlsx-js-style solo se carga bajo demanda (import dinámico) al exportar a
-// Excel: es un fork completo de xlsx que duplica lo que la librería `xlsx`
-// (ya usada en el resto del portal) ya trae, así que cargarlo de entrada
-// aquí infla el bundle de TODA la app en ~900 kB aunque nadie exporte nunca.
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+// ExcelJS solo se carga bajo demanda (import dinámico) al exportar a Excel:
+// es la única librería del proyecto que puede tanto darle estilo formal a
+// las celdas COMO incrustar la imagen de la gráfica (xlsx/xlsx-js-style no
+// soportan imágenes en absoluto, es limitación real de esas librerías) —
+// pero pesa bastante, así que cargarla de entrada inflaría el bundle de
+// TODA la app aunque nadie exporte nunca.
 
 const TIPOS = [
   { valor: "universidad", etiqueta: "Universidad" },
@@ -26,11 +29,9 @@ const TIPOS = [
 ];
 
 /* =====================================================================
-   EXPORTACIÓN A EXCEL Y PDF
+   EXPORTACIÓN A EXCEL Y PDF (con la gráfica incrustada)
    ===================================================================== */
 
-// xlsx (community) no soporta estilos de celda — se usa xlsx-js-style
-// (mismo API, drop-in) solo en esta página para el diseño formal pedido.
 const COLOR_BANNER = "5B21B6"; // purple-800
 const COLOR_HEADER = "7C3AED"; // purple-600
 const COLOR_SUBBANDA = "EDE9FE"; // purple-100
@@ -38,134 +39,185 @@ const COLOR_FILA_PAR = "F5F3FF"; // purple-50
 const COLOR_TEXTO = "374151";
 const COLOR_TENUE = "6B7280";
 
+const argb = (hex6) => "FF" + hex6;
+const FILL = (hex6) => ({ type: "pattern", pattern: "solid", fgColor: { argb: argb(hex6) } });
 const BORDE_FINO = {
-  top: { style: "thin", color: { rgb: "E5E7EB" } },
-  bottom: { style: "thin", color: { rgb: "E5E7EB" } },
-  left: { style: "thin", color: { rgb: "E5E7EB" } },
-  right: { style: "thin", color: { rgb: "E5E7EB" } },
+  top: { style: "thin", color: { argb: argb("E5E7EB") } },
+  bottom: { style: "thin", color: { argb: argb("E5E7EB") } },
+  left: { style: "thin", color: { argb: argb("E5E7EB") } },
+  right: { style: "thin", color: { argb: argb("E5E7EB") } },
 };
 
-function estilizar(ws, ref, estilo) {
-  if (!ws[ref]) ws[ref] = { t: "s", v: "" };
-  ws[ref].s = estilo;
+// Convierte el <svg> de la gráfica ya renderizada en pantalla a un PNG en
+// memoria (data URL). No usa html2canvas: al ser SVG puro (Recharts), pasar
+// por <img>+<canvas> directo es más simple y fiel que capturar DOM+CSS.
+// Devuelve null si el contenedor no tiene ninguna gráfica montada (p. ej.
+// un profesor sin asignaciones) — los exports deben seguir funcionando sin
+// imagen en ese caso, no truena nada.
+async function capturarGraficaComoPNG(contenedorRef, escala = 2) {
+  const svg = contenedorRef.current?.querySelector("svg");
+  if (!svg) return null;
+
+  const { width, height } = svg.getBoundingClientRect();
+  if (!width || !height) return null;
+
+  const clon = svg.cloneNode(true);
+  clon.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clon.setAttribute("width", width);
+  clon.setAttribute("height", height);
+
+  // Fondo blanco de por medio: el SVG de Recharts es transparente, y sin
+  // esto las barras quedan "flotando" tanto en Excel como en el PDF.
+  const fondo = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  fondo.setAttribute("width", "100%");
+  fondo.setAttribute("height", "100%");
+  fondo.setAttribute("fill", "#ffffff");
+  clon.insertBefore(fondo, clon.firstChild);
+
+  const svgString = new XMLSerializer().serializeToString(clon);
+  const url = URL.createObjectURL(new Blob([svgString], { type: "image/svg+xml;charset=utf-8" }));
+
+  try {
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = url;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width * escala;
+    canvas.height = height * escala;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(escala, escala);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    return { dataUrl: canvas.toDataURL("image/png"), width: Math.round(width), height: Math.round(height) };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
-function descargarWorkbook(XLSXStyle, ws, nombreHoja, nombreArchivo) {
-  const wb = XLSXStyle.utils.book_new();
-  XLSXStyle.utils.book_append_sheet(wb, ws, nombreHoja);
-  XLSXStyle.writeFile(wb, nombreArchivo);
+async function descargarWorkbookExcelJS(wb, nombreArchivo) {
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
-// Banner + subtítulo + meta, comunes a los 2 exports de Excel. `anchoCols`
-// es cuántas columnas ocupan los merges (6 para el general, 2 para el de
-// un solo profesor).
-function encabezadoExcel(filas, anchoCols, titulo, subtitulo, meta) {
-  filas.push([titulo]);
-  filas.push([subtitulo]);
-  filas.push([meta]);
-  filas.push([]);
-  return { filaTitulo: 0, filaSubtitulo: 1, filaMeta: 2, ultimaCol: anchoCols - 1 };
+function bannerExcel(ws, numCols, titulo, subtitulo, meta) {
+  ws.mergeCells(1, 1, 1, numCols);
+  const cTitulo = ws.getCell(1, 1);
+  cTitulo.value = titulo;
+  cTitulo.fill = FILL(COLOR_BANNER);
+  cTitulo.font = { bold: true, size: 16, color: { argb: argb("FFFFFF") } };
+  cTitulo.alignment = { horizontal: "center", vertical: "middle" };
+  ws.getRow(1).height = 26;
+
+  ws.mergeCells(2, 1, 2, numCols);
+  const cSub = ws.getCell(2, 1);
+  cSub.value = subtitulo;
+  cSub.fill = FILL(COLOR_HEADER);
+  cSub.font = { bold: true, size: 12, color: { argb: argb("FFFFFF") } };
+  cSub.alignment = { horizontal: "center", vertical: "middle" };
+  ws.getRow(2).height = 20;
+
+  ws.mergeCells(3, 1, 3, numCols);
+  const cMeta = ws.getCell(3, 1);
+  cMeta.value = meta;
+  cMeta.fill = FILL(COLOR_HEADER);
+  cMeta.font = { italic: true, size: 9, color: { argb: argb("FFFFFF") } };
+  cMeta.alignment = { horizontal: "center", vertical: "middle" };
 }
 
-async function exportarExcelGeneral(porProfesor, resumen, filtrosTexto) {
-  const XLSXStyle = (await import("xlsx-js-style")).default;
+// Inserta la imagen de la gráfica (si se pudo capturar) y devuelve la
+// siguiente fila libre — se reservan filas en blanco del alto aproximado
+// de la imagen para que la tabla de abajo no le quede encima.
+function insertarGraficaExcel(wb, ws, grafica, filaInicio) {
+  if (!grafica) return filaInicio + 1;
+  const imageId = wb.addImage({ base64: grafica.dataUrl, extension: "png" });
+  ws.addImage(imageId, {
+    tl: { col: 0, row: filaInicio - 1 },
+    ext: { width: grafica.width, height: grafica.height },
+  });
+  const filasReservadas = Math.max(6, Math.ceil(grafica.height / 20) + 1);
+  return filaInicio + filasReservadas + 1;
+}
 
-  const filas = [];
-  const { filaTitulo, filaSubtitulo, filaMeta, ultimaCol } = encabezadoExcel(
-    filas,
+async function exportarExcelGeneral(porProfesor, resumen, filtrosTexto, grafica) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Pendientes");
+  ws.columns = [{ width: 30 }, { width: 28 }, { width: 32 }, { width: 24 }, { width: 32 }, { width: 36 }];
+
+  bannerExcel(
+    ws,
     6,
     "Instituto Tecnológico Bridge",
     "Pendientes de Calificaciones — Reporte General",
     `Generado: ${new Date().toLocaleString("es-MX")}${filtrosTexto ? " · Filtros: " + filtrosTexto : ""}`
   );
 
-  filas.push([
-    `Profesores con pendientes: ${resumen.profesores}    ·    Asignaciones con huecos: ${resumen.asignaciones}    ·    Alumnos sin calificación: ${resumen.alumnos}`,
-  ]);
-  filas.push([]);
+  ws.mergeCells(4, 1, 4, 6);
+  const cResumen = ws.getCell(4, 1);
+  cResumen.value = `Profesores con pendientes: ${resumen.profesores}    ·    Asignaciones con huecos: ${resumen.asignaciones}    ·    Alumnos sin calificación: ${resumen.alumnos}`;
+  cResumen.fill = FILL(COLOR_SUBBANDA);
+  cResumen.font = { bold: true, size: 10, color: { argb: argb(COLOR_BANNER) } };
+  cResumen.alignment = { horizontal: "center", vertical: "middle" };
 
-  const filaEncabezadoTabla = filas.length;
-  filas.push(["Profesor", "Materia", "Grupo", "Carrera", "Alumno", "Correo"]);
+  const filaEncabezado = insertarGraficaExcel(wb, ws, grafica, 6);
+  ["Profesor", "Materia", "Grupo", "Carrera", "Alumno", "Correo"].forEach((texto, i) => {
+    const c = ws.getCell(filaEncabezado, i + 1);
+    c.value = texto;
+    c.fill = FILL(COLOR_HEADER);
+    c.font = { bold: true, size: 10, color: { argb: argb("FFFFFF") } };
+    c.alignment = { horizontal: "center", vertical: "middle" };
+    c.border = BORDE_FINO;
+  });
 
-  const filaInicioDatos = filas.length;
+  let f = filaEncabezado + 1;
+  let i = 0;
   porProfesor.forEach((prof) => {
     prof.asignaciones.forEach((asig) => {
       asig.alumnos.forEach((al) => {
-        filas.push([prof.profesorNombre, asig.materia, asig.grupoNombre, asig.carreraNombre, al.nombre, al.correo]);
+        const par = i % 2 === 0;
+        [prof.profesorNombre, asig.materia, asig.grupoNombre, asig.carreraNombre, al.nombre, al.correo].forEach(
+          (valor, c) => {
+            const celda = ws.getCell(f, c + 1);
+            celda.value = valor;
+            celda.fill = FILL(par ? COLOR_FILA_PAR : "FFFFFF");
+            celda.font = { size: 10, color: { argb: argb(c === 5 ? COLOR_TENUE : COLOR_TEXTO) } };
+            celda.border = BORDE_FINO;
+            celda.alignment = { vertical: "middle" };
+          }
+        );
+        f++;
+        i++;
       });
     });
   });
 
-  const ws = XLSXStyle.utils.aoa_to_sheet(filas);
-  ws["!merges"] = [
-    { s: { r: filaTitulo, c: 0 }, e: { r: filaTitulo, c: ultimaCol } },
-    { s: { r: filaSubtitulo, c: 0 }, e: { r: filaSubtitulo, c: ultimaCol } },
-    { s: { r: filaMeta, c: 0 }, e: { r: filaMeta, c: ultimaCol } },
-    { s: { r: filaMeta + 1, c: 0 }, e: { r: filaMeta + 1, c: ultimaCol } },
-  ];
-  ws["!cols"] = [{ wch: 30 }, { wch: 28 }, { wch: 32 }, { wch: 24 }, { wch: 32 }, { wch: 36 }];
-  ws["!rows"] = [{ hpx: 30 }, { hpx: 22 }, { hpx: 18 }, { hpx: 18 }];
+  if (f > filaEncabezado + 1) ws.autoFilter = `A${filaEncabezado}:F${f - 1}`;
 
-  for (let c = 0; c <= ultimaCol; c++) {
-    const col = XLSXStyle.utils.encode_col(c);
-    estilizar(ws, `${col}${filaTitulo + 1}`, {
-      font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: COLOR_BANNER } },
-      alignment: { horizontal: "center", vertical: "center" },
-    });
-    estilizar(ws, `${col}${filaSubtitulo + 1}`, {
-      font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: COLOR_HEADER } },
-      alignment: { horizontal: "center", vertical: "center" },
-    });
-    estilizar(ws, `${col}${filaMeta + 1}`, {
-      font: { italic: true, sz: 9, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: COLOR_HEADER } },
-      alignment: { horizontal: "center", vertical: "center" },
-    });
-    estilizar(ws, `${col}${filaMeta + 2}`, {
-      font: { bold: true, sz: 10, color: { rgb: COLOR_BANNER } },
-      fill: { fgColor: { rgb: COLOR_SUBBANDA } },
-      alignment: { horizontal: "center", vertical: "center" },
-    });
-  }
-
-  for (let c = 0; c <= ultimaCol; c++) {
-    const col = XLSXStyle.utils.encode_col(c);
-    estilizar(ws, `${col}${filaEncabezadoTabla + 1}`, {
-      font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: COLOR_HEADER } },
-      alignment: { horizontal: "center", vertical: "center" },
-      border: BORDE_FINO,
-    });
-  }
-
-  const totalFilasDatos = filas.length - filaInicioDatos;
-  for (let f = 0; f < totalFilasDatos; f++) {
-    const filaExcel = filaInicioDatos + f + 1;
-    const par = f % 2 === 0;
-    for (let c = 0; c <= ultimaCol; c++) {
-      const col = XLSXStyle.utils.encode_col(c);
-      estilizar(ws, `${col}${filaExcel}`, {
-        font: { sz: 10, color: { rgb: c === 5 ? COLOR_TENUE : COLOR_TEXTO } },
-        fill: { fgColor: { rgb: par ? COLOR_FILA_PAR : "FFFFFF" } },
-        border: BORDE_FINO,
-        alignment: { vertical: "center" },
-      });
-    }
-  }
-
-  ws["!autofilter"] = { ref: `A${filaEncabezadoTabla + 1}:F${filaInicioDatos + totalFilasDatos}` };
-
-  descargarWorkbook(XLSXStyle, ws, "Pendientes", `pendientes_calificaciones_general_${Date.now()}.xlsx`);
+  await descargarWorkbookExcelJS(wb, `pendientes_calificaciones_general_${Date.now()}.xlsx`);
 }
 
-async function exportarExcelProfesor(prof) {
-  const XLSXStyle = (await import("xlsx-js-style")).default;
+async function exportarExcelProfesor(prof, grafica) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Pendientes");
+  ws.columns = [{ width: 34 }, { width: 38 }];
 
-  const filas = [];
-  const { filaTitulo, filaSubtitulo, filaMeta, ultimaCol } = encabezadoExcel(
-    filas,
+  bannerExcel(
+    ws,
     2,
     "Instituto Tecnológico Bridge",
     `Pendientes de Calificaciones — ${prof.profesorNombre}`,
@@ -174,95 +226,63 @@ async function exportarExcelProfesor(prof) {
     } con huecos · ${prof.totalAlumnos} alumno${prof.totalAlumnos === 1 ? "" : "s"} sin calificación`
   );
 
-  const filasEspeciales = []; // { fila, tipo: 'materia' | 'meta' | 'header' }
+  let f = insertarGraficaExcel(wb, ws, grafica, 4);
 
   prof.asignaciones.forEach((asig) => {
-    filasEspeciales.push({ fila: filas.length, tipo: "materia" });
-    filas.push([`▸ ${asig.materia}`]);
+    ws.mergeCells(f, 1, f, 2);
+    const cMateria = ws.getCell(f, 1);
+    cMateria.value = `▸ ${asig.materia}`;
+    cMateria.fill = FILL(COLOR_SUBBANDA);
+    cMateria.font = { bold: true, size: 11, color: { argb: argb(COLOR_BANNER) } };
+    f++;
 
-    filasEspeciales.push({ fila: filas.length, tipo: "meta" });
-    filas.push([`${asig.grupoNombre} · ${asig.carreraNombre}`]);
+    ws.mergeCells(f, 1, f, 2);
+    const cMeta = ws.getCell(f, 1);
+    cMeta.value = `${asig.grupoNombre} · ${asig.carreraNombre}`;
+    cMeta.font = { italic: true, size: 9, color: { argb: argb(COLOR_TENUE) } };
+    f++;
 
-    filasEspeciales.push({ fila: filas.length, tipo: "header" });
-    filas.push(["Alumno", "Correo"]);
-
-    const inicioDatos = filas.length;
-    asig.alumnos.forEach((al) => filas.push([al.nombre, al.correo]));
-    filasEspeciales.push({ fila: inicioDatos, tipo: "datos", cantidad: asig.alumnos.length });
-
-    filas.push([]);
-  });
-
-  const ws = XLSXStyle.utils.aoa_to_sheet(filas);
-  ws["!merges"] = [
-    { s: { r: filaTitulo, c: 0 }, e: { r: filaTitulo, c: ultimaCol } },
-    { s: { r: filaSubtitulo, c: 0 }, e: { r: filaSubtitulo, c: ultimaCol } },
-    { s: { r: filaMeta, c: 0 }, e: { r: filaMeta, c: ultimaCol } },
-  ];
-  ws["!cols"] = [{ wch: 34 }, { wch: 38 }];
-  ws["!rows"] = [{ hpx: 30 }, { hpx: 22 }, { hpx: 18 }];
-
-  for (let c = 0; c <= ultimaCol; c++) {
-    const col = XLSXStyle.utils.encode_col(c);
-    estilizar(ws, `${col}${filaTitulo + 1}`, {
-      font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: COLOR_BANNER } },
-      alignment: { horizontal: "center", vertical: "center" },
+    ["Alumno", "Correo"].forEach((texto, c) => {
+      const celda = ws.getCell(f, c + 1);
+      celda.value = texto;
+      celda.fill = FILL(COLOR_HEADER);
+      celda.font = { bold: true, size: 10, color: { argb: argb("FFFFFF") } };
+      celda.border = BORDE_FINO;
     });
-    estilizar(ws, `${col}${filaSubtitulo + 1}`, {
-      font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: COLOR_HEADER } },
-      alignment: { horizontal: "center", vertical: "center" },
-    });
-    estilizar(ws, `${col}${filaMeta + 1}`, {
-      font: { italic: true, sz: 9, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: COLOR_HEADER } },
-      alignment: { horizontal: "center", vertical: "center" },
-    });
-  }
+    f++;
 
-  filasEspeciales.forEach(({ fila, tipo, cantidad }) => {
-    const filaExcel = fila + 1;
+    asig.alumnos.forEach((al, idx) => {
+      const par = idx % 2 === 0;
+      [al.nombre, al.correo].forEach((valor, c) => {
+        const celda = ws.getCell(f, c + 1);
+        celda.value = valor;
+        celda.fill = FILL(par ? COLOR_FILA_PAR : "FFFFFF");
+        celda.font = { size: 10, color: { argb: argb(c === 1 ? COLOR_TENUE : COLOR_TEXTO) } };
+        celda.border = BORDE_FINO;
+      });
+      f++;
+    });
 
-    if (tipo === "materia") {
-      ws["!merges"].push({ s: { r: fila, c: 0 }, e: { r: fila, c: ultimaCol } });
-      for (let c = 0; c <= ultimaCol; c++) {
-        estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel}`, {
-          font: { bold: true, sz: 11, color: { rgb: COLOR_BANNER } },
-          fill: { fgColor: { rgb: COLOR_SUBBANDA } },
-        });
-      }
-    } else if (tipo === "meta") {
-      ws["!merges"].push({ s: { r: fila, c: 0 }, e: { r: fila, c: ultimaCol } });
-      for (let c = 0; c <= ultimaCol; c++) {
-        estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel}`, {
-          font: { italic: true, sz: 9, color: { rgb: COLOR_TENUE } },
-        });
-      }
-    } else if (tipo === "header") {
-      for (let c = 0; c <= ultimaCol; c++) {
-        estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel}`, {
-          font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
-          fill: { fgColor: { rgb: COLOR_HEADER } },
-          border: BORDE_FINO,
-        });
-      }
-    } else if (tipo === "datos") {
-      for (let i = 0; i < cantidad; i++) {
-        const par = i % 2 === 0;
-        for (let c = 0; c <= ultimaCol; c++) {
-          estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel + i}`, {
-            font: { sz: 10, color: { rgb: c === 1 ? COLOR_TENUE : COLOR_TEXTO } },
-            fill: { fgColor: { rgb: par ? COLOR_FILA_PAR : "FFFFFF" } },
-            border: BORDE_FINO,
-          });
-        }
-      }
-    }
+    f++; // espaciador entre materias
   });
 
   const nombreArchivo = `pendientes_${prof.profesorNombre.replace(/\s+/g, "_")}_${Date.now()}.xlsx`;
-  descargarWorkbook(XLSXStyle, ws, "Pendientes", nombreArchivo);
+  await descargarWorkbookExcelJS(wb, nombreArchivo);
+}
+
+// Convierte el tamaño capturado (px, a 96dpi) a mm para jsPDF, y lo achica
+// si no cabe en el ancho útil de la página, conservando proporción.
+function medidasImagenPDF(doc, grafica, margenMM = 14) {
+  const pxToMm = 25.4 / 96;
+  const anchoMax = doc.internal.pageSize.getWidth() - margenMM * 2;
+  let w = grafica.width * pxToMm;
+  let h = grafica.height * pxToMm;
+  if (w > anchoMax) {
+    const factor = anchoMax / w;
+    w *= factor;
+    h *= factor;
+  }
+  return { w, h };
 }
 
 function encabezadoPDF(doc, subtitulo, meta) {
@@ -294,7 +314,7 @@ function piePagina(doc) {
   }
 }
 
-function exportarPDFGeneral(porProfesor, resumen, filtrosTexto) {
+function exportarPDFGeneral(porProfesor, resumen, filtrosTexto, grafica) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
   encabezadoPDF(
@@ -304,6 +324,13 @@ function exportarPDFGeneral(porProfesor, resumen, filtrosTexto) {
       resumen.profesores
     } profesores  ·  ${resumen.asignaciones} asignaciones con huecos  ·  ${resumen.alumnos} alumnos pendientes`
   );
+
+  let startY = 44;
+  if (grafica) {
+    const { w, h } = medidasImagenPDF(doc, grafica);
+    doc.addImage(grafica.dataUrl, "PNG", 14, startY, w, h);
+    startY += h + 8;
+  }
 
   const filas = [];
   porProfesor.forEach((prof) => {
@@ -315,7 +342,7 @@ function exportarPDFGeneral(porProfesor, resumen, filtrosTexto) {
   });
 
   autoTable(doc, {
-    startY: 44,
+    startY,
     head: [["Profesor", "Materia", "Grupo", "Carrera", "Alumno", "Correo"]],
     body: filas,
     theme: "striped",
@@ -329,7 +356,7 @@ function exportarPDFGeneral(porProfesor, resumen, filtrosTexto) {
   doc.save(`pendientes_calificaciones_general_${Date.now()}.pdf`);
 }
 
-function exportarPDFProfesor(prof) {
+function exportarPDFProfesor(prof, grafica) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
 
   encabezadoPDF(
@@ -342,6 +369,12 @@ function exportarPDFProfesor(prof) {
 
   let y = 46;
   const pageHeight = doc.internal.pageSize.getHeight();
+
+  if (grafica) {
+    const { w, h } = medidasImagenPDF(doc, grafica);
+    doc.addImage(grafica.dataUrl, "PNG", 14, y, w, h);
+    y += h + 10;
+  }
 
   prof.asignaciones.forEach((asig) => {
     if (y > pageHeight - 40) {
@@ -374,6 +407,51 @@ function exportarPDFProfesor(prof) {
   doc.save(`pendientes_${prof.profesorNombre.replace(/\s+/g, "_")}_${Date.now()}.pdf`);
 }
 
+/* =====================================================================
+   GRÁFICA
+   ===================================================================== */
+
+function acortarNombre(texto, maxLen = 24) {
+  if (!texto) return "";
+  return texto.length > maxLen ? texto.slice(0, maxLen - 1) + "…" : texto;
+}
+
+// Tooltip propio: el de Recharts por defecto no separa bien la etiqueta
+// completa (puede venir truncada) del valor.
+function TooltipGrafica({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const punto = payload[0].payload;
+  return (
+    <div className="bg-white border border-purple-200 rounded-lg shadow-md px-3 py-2 text-sm">
+      <p className="font-semibold text-gray-800">{punto.etiquetaCompleta}</p>
+      <p className="text-purple-700">
+        {punto.valor} alumno{punto.valor === 1 ? "" : "s"} sin calificación
+      </p>
+    </div>
+  );
+}
+
+function GraficaBarras({ datos }) {
+  const alto = Math.max(180, datos.length * 34);
+  return (
+    <ResponsiveContainer width="100%" height={alto}>
+      <BarChart data={datos} layout="vertical" margin={{ top: 5, right: 24, left: 4, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
+        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: "#6B7280" }} />
+        <YAxis
+          type="category"
+          dataKey="etiqueta"
+          width={150}
+          interval={0}
+          tick={{ fontSize: 12, fill: "#374151" }}
+        />
+        <Tooltip content={<TooltipGrafica />} cursor={{ fill: "#F5F3FF" }} />
+        <Bar dataKey="valor" fill="#7C3AED" radius={[0, 6, 6, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 // "Pendiente" = un alumno inscrito en un grupo (grupo_alumnos) cuya materia
 // tiene profesor asignado (grupo_profesores), pero no existe ninguna fila en
 // `calificaciones` (universidad/autoplaneado) ni `calificaciones_parciales`
@@ -391,6 +469,9 @@ export default function PendientesCalificaciones() {
   const [tipoFiltro, setTipoFiltro] = useState("");
   const [periodoFiltro, setPeriodoFiltro] = useState("");
   const [profesorSeleccionado, setProfesorSeleccionado] = useState(null);
+
+  const graficaProfesoresRef = useRef(null);
+  const graficaMateriaRef = useRef(null);
 
   useEffect(() => {
     cargar();
@@ -553,6 +634,30 @@ export default function PendientesCalificaciones() {
 
   const profesorDetalle = porProfesor.find((p) => p.id_profesor === profesorSeleccionado) || null;
 
+  // Top 15 para que la gráfica general siga siendo legible aunque haya
+  // muchos profesores con pendientes — la tabla de abajo (y los exports)
+  // sí traen a todos, esto es solo el vistazo visual.
+  const MAX_BARRAS_PROFESORES = 15;
+  const datosGraficaProfesores = useMemo(
+    () =>
+      porProfesor.slice(0, MAX_BARRAS_PROFESORES).map((p) => ({
+        etiqueta: acortarNombre(p.profesorNombre),
+        etiquetaCompleta: p.profesorNombre,
+        valor: p.totalAlumnos,
+      })),
+    [porProfesor]
+  );
+
+  const datosGraficaMateria = useMemo(
+    () =>
+      (profesorDetalle?.asignaciones || []).map((a) => ({
+        etiqueta: acortarNombre(a.materia, 28),
+        etiquetaCompleta: `${a.materia} — ${a.grupoNombre}`,
+        valor: a.alumnos.length,
+      })),
+    [profesorDetalle]
+  );
+
   const filtrosTexto = [
     busqueda && `texto "${busqueda}"`,
     tipoFiltro && TIPOS.find((t) => t.valor === tipoFiltro)?.etiqueta,
@@ -577,25 +682,29 @@ export default function PendientesCalificaciones() {
   const handleExportarExcelGeneral = async () => {
     if (porProfesor.length === 0) return Swal.fire("Sin datos", "No hay pendientes para exportar.", "warning");
     if (!(await confirmarExportar("Excel"))) return;
-    await exportarExcelGeneral(porProfesor, resumen, filtrosTexto);
+    const grafica = await capturarGraficaComoPNG(graficaProfesoresRef);
+    await exportarExcelGeneral(porProfesor, resumen, filtrosTexto, grafica);
   };
 
   const handleExportarPDFGeneral = async () => {
     if (porProfesor.length === 0) return Swal.fire("Sin datos", "No hay pendientes para exportar.", "warning");
     if (!(await confirmarExportar("PDF"))) return;
-    exportarPDFGeneral(porProfesor, resumen, filtrosTexto);
+    const grafica = await capturarGraficaComoPNG(graficaProfesoresRef);
+    exportarPDFGeneral(porProfesor, resumen, filtrosTexto, grafica);
   };
 
   const handleExportarExcelProfesor = async () => {
     if (!profesorDetalle) return;
     if (!(await confirmarExportar("Excel"))) return;
-    await exportarExcelProfesor(profesorDetalle);
+    const grafica = await capturarGraficaComoPNG(graficaMateriaRef);
+    await exportarExcelProfesor(profesorDetalle, grafica);
   };
 
   const handleExportarPDFProfesor = async () => {
     if (!profesorDetalle) return;
     if (!(await confirmarExportar("PDF"))) return;
-    exportarPDFProfesor(profesorDetalle);
+    const grafica = await capturarGraficaComoPNG(graficaMateriaRef);
+    exportarPDFProfesor(profesorDetalle, grafica);
   };
 
   return (
@@ -634,6 +743,17 @@ export default function PendientesCalificaciones() {
               <p className="text-3xl font-bold text-purple-800">{resumen.alumnos}</p>
               <p className="text-sm text-gray-500 mt-1">alumnos sin calificación</p>
             </div>
+          </div>
+        )}
+
+        {/* Gráfica (todos los profesores) */}
+        {!loading && !profesorDetalle && porProfesor.length > 0 && (
+          <div ref={graficaProfesoresRef} className="bg-white rounded-2xl shadow-md p-6 mb-6 border border-gray-100">
+            <h3 className="font-semibold text-gray-800 mb-4">
+              Alumnos pendientes por profesor
+              {porProfesor.length > MAX_BARRAS_PROFESORES && ` (top ${MAX_BARRAS_PROFESORES} de ${porProfesor.length})`}
+            </h3>
+            <GraficaBarras datos={datosGraficaProfesores} />
           </div>
         )}
 
@@ -741,6 +861,11 @@ export default function PendientesCalificaciones() {
               <span className="inline-flex items-center justify-center min-w-10 h-10 px-3 rounded-full bg-red-100 text-red-700 font-bold">
                 {profesorDetalle.totalAlumnos}
               </span>
+            </div>
+
+            <div ref={graficaMateriaRef} className="bg-white rounded-2xl shadow-md p-6 mb-6 border border-gray-100">
+              <h3 className="font-semibold text-gray-800 mb-4">Alumnos pendientes por materia</h3>
+              <GraficaBarras datos={datosGraficaMateria} />
             </div>
 
             <div className="flex flex-wrap gap-3 mb-6">
