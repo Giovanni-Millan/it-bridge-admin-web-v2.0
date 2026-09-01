@@ -2,14 +2,377 @@ import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { supabase } from "../../components/supabaseClient.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faMagnifyingGlass, faUserGraduate, faBook } from "@fortawesome/free-solid-svg-icons";
+import {
+  faArrowLeft,
+  faMagnifyingGlass,
+  faUserGraduate,
+  faBook,
+  faFilePdf,
+  faFileExcel,
+} from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import Swal from "sweetalert2";
+// xlsx-js-style solo se carga bajo demanda (import dinámico) al exportar a
+// Excel: es un fork completo de xlsx que duplica lo que la librería `xlsx`
+// (ya usada en el resto del portal) ya trae, así que cargarlo de entrada
+// aquí infla el bundle de TODA la app en ~900 kB aunque nadie exporte nunca.
 
 const TIPOS = [
   { valor: "universidad", etiqueta: "Universidad" },
   { valor: "bachillerato", etiqueta: "Bachillerato" },
   { valor: "autoplaneado", etiqueta: "Autoplaneado" },
 ];
+
+/* =====================================================================
+   EXPORTACIÓN A EXCEL Y PDF
+   ===================================================================== */
+
+// xlsx (community) no soporta estilos de celda — se usa xlsx-js-style
+// (mismo API, drop-in) solo en esta página para el diseño formal pedido.
+const COLOR_BANNER = "5B21B6"; // purple-800
+const COLOR_HEADER = "7C3AED"; // purple-600
+const COLOR_SUBBANDA = "EDE9FE"; // purple-100
+const COLOR_FILA_PAR = "F5F3FF"; // purple-50
+const COLOR_TEXTO = "374151";
+const COLOR_TENUE = "6B7280";
+
+const BORDE_FINO = {
+  top: { style: "thin", color: { rgb: "E5E7EB" } },
+  bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+  left: { style: "thin", color: { rgb: "E5E7EB" } },
+  right: { style: "thin", color: { rgb: "E5E7EB" } },
+};
+
+function estilizar(ws, ref, estilo) {
+  if (!ws[ref]) ws[ref] = { t: "s", v: "" };
+  ws[ref].s = estilo;
+}
+
+function descargarWorkbook(XLSXStyle, ws, nombreHoja, nombreArchivo) {
+  const wb = XLSXStyle.utils.book_new();
+  XLSXStyle.utils.book_append_sheet(wb, ws, nombreHoja);
+  XLSXStyle.writeFile(wb, nombreArchivo);
+}
+
+// Banner + subtítulo + meta, comunes a los 2 exports de Excel. `anchoCols`
+// es cuántas columnas ocupan los merges (6 para el general, 2 para el de
+// un solo profesor).
+function encabezadoExcel(filas, anchoCols, titulo, subtitulo, meta) {
+  filas.push([titulo]);
+  filas.push([subtitulo]);
+  filas.push([meta]);
+  filas.push([]);
+  return { filaTitulo: 0, filaSubtitulo: 1, filaMeta: 2, ultimaCol: anchoCols - 1 };
+}
+
+async function exportarExcelGeneral(porProfesor, resumen, filtrosTexto) {
+  const XLSXStyle = (await import("xlsx-js-style")).default;
+
+  const filas = [];
+  const { filaTitulo, filaSubtitulo, filaMeta, ultimaCol } = encabezadoExcel(
+    filas,
+    6,
+    "Instituto Tecnológico Bridge",
+    "Pendientes de Calificaciones — Reporte General",
+    `Generado: ${new Date().toLocaleString("es-MX")}${filtrosTexto ? " · Filtros: " + filtrosTexto : ""}`
+  );
+
+  filas.push([
+    `Profesores con pendientes: ${resumen.profesores}    ·    Asignaciones con huecos: ${resumen.asignaciones}    ·    Alumnos sin calificación: ${resumen.alumnos}`,
+  ]);
+  filas.push([]);
+
+  const filaEncabezadoTabla = filas.length;
+  filas.push(["Profesor", "Materia", "Grupo", "Carrera", "Alumno", "Correo"]);
+
+  const filaInicioDatos = filas.length;
+  porProfesor.forEach((prof) => {
+    prof.asignaciones.forEach((asig) => {
+      asig.alumnos.forEach((al) => {
+        filas.push([prof.profesorNombre, asig.materia, asig.grupoNombre, asig.carreraNombre, al.nombre, al.correo]);
+      });
+    });
+  });
+
+  const ws = XLSXStyle.utils.aoa_to_sheet(filas);
+  ws["!merges"] = [
+    { s: { r: filaTitulo, c: 0 }, e: { r: filaTitulo, c: ultimaCol } },
+    { s: { r: filaSubtitulo, c: 0 }, e: { r: filaSubtitulo, c: ultimaCol } },
+    { s: { r: filaMeta, c: 0 }, e: { r: filaMeta, c: ultimaCol } },
+    { s: { r: filaMeta + 1, c: 0 }, e: { r: filaMeta + 1, c: ultimaCol } },
+  ];
+  ws["!cols"] = [{ wch: 30 }, { wch: 28 }, { wch: 32 }, { wch: 24 }, { wch: 32 }, { wch: 36 }];
+  ws["!rows"] = [{ hpx: 30 }, { hpx: 22 }, { hpx: 18 }, { hpx: 18 }];
+
+  for (let c = 0; c <= ultimaCol; c++) {
+    const col = XLSXStyle.utils.encode_col(c);
+    estilizar(ws, `${col}${filaTitulo + 1}`, {
+      font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: COLOR_BANNER } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+    estilizar(ws, `${col}${filaSubtitulo + 1}`, {
+      font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: COLOR_HEADER } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+    estilizar(ws, `${col}${filaMeta + 1}`, {
+      font: { italic: true, sz: 9, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: COLOR_HEADER } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+    estilizar(ws, `${col}${filaMeta + 2}`, {
+      font: { bold: true, sz: 10, color: { rgb: COLOR_BANNER } },
+      fill: { fgColor: { rgb: COLOR_SUBBANDA } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+  }
+
+  for (let c = 0; c <= ultimaCol; c++) {
+    const col = XLSXStyle.utils.encode_col(c);
+    estilizar(ws, `${col}${filaEncabezadoTabla + 1}`, {
+      font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: COLOR_HEADER } },
+      alignment: { horizontal: "center", vertical: "center" },
+      border: BORDE_FINO,
+    });
+  }
+
+  const totalFilasDatos = filas.length - filaInicioDatos;
+  for (let f = 0; f < totalFilasDatos; f++) {
+    const filaExcel = filaInicioDatos + f + 1;
+    const par = f % 2 === 0;
+    for (let c = 0; c <= ultimaCol; c++) {
+      const col = XLSXStyle.utils.encode_col(c);
+      estilizar(ws, `${col}${filaExcel}`, {
+        font: { sz: 10, color: { rgb: c === 5 ? COLOR_TENUE : COLOR_TEXTO } },
+        fill: { fgColor: { rgb: par ? COLOR_FILA_PAR : "FFFFFF" } },
+        border: BORDE_FINO,
+        alignment: { vertical: "center" },
+      });
+    }
+  }
+
+  ws["!autofilter"] = { ref: `A${filaEncabezadoTabla + 1}:F${filaInicioDatos + totalFilasDatos}` };
+
+  descargarWorkbook(XLSXStyle, ws, "Pendientes", `pendientes_calificaciones_general_${Date.now()}.xlsx`);
+}
+
+async function exportarExcelProfesor(prof) {
+  const XLSXStyle = (await import("xlsx-js-style")).default;
+
+  const filas = [];
+  const { filaTitulo, filaSubtitulo, filaMeta, ultimaCol } = encabezadoExcel(
+    filas,
+    2,
+    "Instituto Tecnológico Bridge",
+    `Pendientes de Calificaciones — ${prof.profesorNombre}`,
+    `Generado: ${new Date().toLocaleString("es-MX")} · ${prof.asignaciones.length} materia${
+      prof.asignaciones.length === 1 ? "" : "s"
+    } con huecos · ${prof.totalAlumnos} alumno${prof.totalAlumnos === 1 ? "" : "s"} sin calificación`
+  );
+
+  const filasEspeciales = []; // { fila, tipo: 'materia' | 'meta' | 'header' }
+
+  prof.asignaciones.forEach((asig) => {
+    filasEspeciales.push({ fila: filas.length, tipo: "materia" });
+    filas.push([`▸ ${asig.materia}`]);
+
+    filasEspeciales.push({ fila: filas.length, tipo: "meta" });
+    filas.push([`${asig.grupoNombre} · ${asig.carreraNombre}`]);
+
+    filasEspeciales.push({ fila: filas.length, tipo: "header" });
+    filas.push(["Alumno", "Correo"]);
+
+    const inicioDatos = filas.length;
+    asig.alumnos.forEach((al) => filas.push([al.nombre, al.correo]));
+    filasEspeciales.push({ fila: inicioDatos, tipo: "datos", cantidad: asig.alumnos.length });
+
+    filas.push([]);
+  });
+
+  const ws = XLSXStyle.utils.aoa_to_sheet(filas);
+  ws["!merges"] = [
+    { s: { r: filaTitulo, c: 0 }, e: { r: filaTitulo, c: ultimaCol } },
+    { s: { r: filaSubtitulo, c: 0 }, e: { r: filaSubtitulo, c: ultimaCol } },
+    { s: { r: filaMeta, c: 0 }, e: { r: filaMeta, c: ultimaCol } },
+  ];
+  ws["!cols"] = [{ wch: 34 }, { wch: 38 }];
+  ws["!rows"] = [{ hpx: 30 }, { hpx: 22 }, { hpx: 18 }];
+
+  for (let c = 0; c <= ultimaCol; c++) {
+    const col = XLSXStyle.utils.encode_col(c);
+    estilizar(ws, `${col}${filaTitulo + 1}`, {
+      font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: COLOR_BANNER } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+    estilizar(ws, `${col}${filaSubtitulo + 1}`, {
+      font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: COLOR_HEADER } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+    estilizar(ws, `${col}${filaMeta + 1}`, {
+      font: { italic: true, sz: 9, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: COLOR_HEADER } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+  }
+
+  filasEspeciales.forEach(({ fila, tipo, cantidad }) => {
+    const filaExcel = fila + 1;
+
+    if (tipo === "materia") {
+      ws["!merges"].push({ s: { r: fila, c: 0 }, e: { r: fila, c: ultimaCol } });
+      for (let c = 0; c <= ultimaCol; c++) {
+        estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel}`, {
+          font: { bold: true, sz: 11, color: { rgb: COLOR_BANNER } },
+          fill: { fgColor: { rgb: COLOR_SUBBANDA } },
+        });
+      }
+    } else if (tipo === "meta") {
+      ws["!merges"].push({ s: { r: fila, c: 0 }, e: { r: fila, c: ultimaCol } });
+      for (let c = 0; c <= ultimaCol; c++) {
+        estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel}`, {
+          font: { italic: true, sz: 9, color: { rgb: COLOR_TENUE } },
+        });
+      }
+    } else if (tipo === "header") {
+      for (let c = 0; c <= ultimaCol; c++) {
+        estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel}`, {
+          font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: COLOR_HEADER } },
+          border: BORDE_FINO,
+        });
+      }
+    } else if (tipo === "datos") {
+      for (let i = 0; i < cantidad; i++) {
+        const par = i % 2 === 0;
+        for (let c = 0; c <= ultimaCol; c++) {
+          estilizar(ws, `${XLSXStyle.utils.encode_col(c)}${filaExcel + i}`, {
+            font: { sz: 10, color: { rgb: c === 1 ? COLOR_TENUE : COLOR_TEXTO } },
+            fill: { fgColor: { rgb: par ? COLOR_FILA_PAR : "FFFFFF" } },
+            border: BORDE_FINO,
+          });
+        }
+      }
+    }
+  });
+
+  const nombreArchivo = `pendientes_${prof.profesorNombre.replace(/\s+/g, "_")}_${Date.now()}.xlsx`;
+  descargarWorkbook(XLSXStyle, ws, "Pendientes", nombreArchivo);
+}
+
+function encabezadoPDF(doc, subtitulo, meta) {
+  doc.setFontSize(20);
+  doc.setTextColor(91, 33, 182);
+  doc.text("Bridge Admin", 14, 20);
+
+  doc.setFontSize(15);
+  doc.setTextColor(40, 40, 40);
+  doc.text(subtitulo, 14, 30);
+
+  doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128);
+  doc.text(meta, 14, 38);
+}
+
+function piePagina(doc) {
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `Página ${i} de ${pageCount} · Bridge Admin · Pendientes de Calificaciones`,
+      doc.internal.pageSize.getWidth() / 2,
+      doc.internal.pageSize.getHeight() - 10,
+      { align: "center" }
+    );
+  }
+}
+
+function exportarPDFGeneral(porProfesor, resumen, filtrosTexto) {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+  encabezadoPDF(
+    doc,
+    "Pendientes de Calificaciones — Reporte General",
+    `Generado: ${new Date().toLocaleString("es-MX")}${filtrosTexto ? " · Filtros: " + filtrosTexto : ""}  ·  ${
+      resumen.profesores
+    } profesores  ·  ${resumen.asignaciones} asignaciones con huecos  ·  ${resumen.alumnos} alumnos pendientes`
+  );
+
+  const filas = [];
+  porProfesor.forEach((prof) => {
+    prof.asignaciones.forEach((asig) => {
+      asig.alumnos.forEach((al) => {
+        filas.push([prof.profesorNombre, asig.materia, asig.grupoNombre, asig.carreraNombre, al.nombre, al.correo]);
+      });
+    });
+  });
+
+  autoTable(doc, {
+    startY: 44,
+    head: [["Profesor", "Materia", "Grupo", "Carrera", "Alumno", "Correo"]],
+    body: filas,
+    theme: "striped",
+    headStyles: { fillColor: [124, 58, 237], textColor: 255, fontSize: 9, fontStyle: "bold" },
+    bodyStyles: { fontSize: 8, textColor: 50 },
+    alternateRowStyles: { fillColor: [245, 243, 255] },
+    margin: { left: 14, right: 14 },
+  });
+
+  piePagina(doc);
+  doc.save(`pendientes_calificaciones_general_${Date.now()}.pdf`);
+}
+
+function exportarPDFProfesor(prof) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+  encabezadoPDF(
+    doc,
+    `Pendientes de Calificaciones — ${prof.profesorNombre}`,
+    `Generado: ${new Date().toLocaleString("es-MX")} · ${prof.asignaciones.length} materia${
+      prof.asignaciones.length === 1 ? "" : "s"
+    } con huecos · ${prof.totalAlumnos} alumno${prof.totalAlumnos === 1 ? "" : "s"} sin calificación`
+  );
+
+  let y = 46;
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  prof.asignaciones.forEach((asig) => {
+    if (y > pageHeight - 40) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setTextColor(91, 33, 182);
+    doc.text(asig.materia, 14, y);
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`${asig.grupoNombre} · ${asig.carreraNombre}`, 14, y + 5);
+
+    autoTable(doc, {
+      startY: y + 9,
+      head: [["Alumno", "Correo"]],
+      body: asig.alumnos.map((al) => [al.nombre, al.correo]),
+      theme: "striped",
+      headStyles: { fillColor: [124, 58, 237], textColor: 255, fontSize: 9, fontStyle: "bold" },
+      bodyStyles: { fontSize: 8, textColor: 50 },
+      alternateRowStyles: { fillColor: [245, 243, 255] },
+      margin: { left: 14, right: 14 },
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+  });
+
+  piePagina(doc);
+  doc.save(`pendientes_${prof.profesorNombre.replace(/\s+/g, "_")}_${Date.now()}.pdf`);
+}
 
 // "Pendiente" = un alumno inscrito en un grupo (grupo_alumnos) cuya materia
 // tiene profesor asignado (grupo_profesores), pero no existe ninguna fila en
@@ -190,6 +553,51 @@ export default function PendientesCalificaciones() {
 
   const profesorDetalle = porProfesor.find((p) => p.id_profesor === profesorSeleccionado) || null;
 
+  const filtrosTexto = [
+    busqueda && `texto "${busqueda}"`,
+    tipoFiltro && TIPOS.find((t) => t.valor === tipoFiltro)?.etiqueta,
+    periodoFiltro,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const confirmarExportar = async (tipo) => {
+    const result = await Swal.fire({
+      title: `¿Descargar ${tipo}?`,
+      text: `Se generará el reporte en formato ${tipo}`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Sí, descargar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: tipo === "Excel" ? "#16a34a" : "#7c3aed",
+    });
+    return result.isConfirmed;
+  };
+
+  const handleExportarExcelGeneral = async () => {
+    if (porProfesor.length === 0) return Swal.fire("Sin datos", "No hay pendientes para exportar.", "warning");
+    if (!(await confirmarExportar("Excel"))) return;
+    await exportarExcelGeneral(porProfesor, resumen, filtrosTexto);
+  };
+
+  const handleExportarPDFGeneral = async () => {
+    if (porProfesor.length === 0) return Swal.fire("Sin datos", "No hay pendientes para exportar.", "warning");
+    if (!(await confirmarExportar("PDF"))) return;
+    exportarPDFGeneral(porProfesor, resumen, filtrosTexto);
+  };
+
+  const handleExportarExcelProfesor = async () => {
+    if (!profesorDetalle) return;
+    if (!(await confirmarExportar("Excel"))) return;
+    await exportarExcelProfesor(profesorDetalle);
+  };
+
+  const handleExportarPDFProfesor = async () => {
+    if (!profesorDetalle) return;
+    if (!(await confirmarExportar("PDF"))) return;
+    exportarPDFProfesor(profesorDetalle);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Navbar titulo="Pendientes de Calificaciones" />
@@ -226,6 +634,26 @@ export default function PendientesCalificaciones() {
               <p className="text-3xl font-bold text-purple-800">{resumen.alumnos}</p>
               <p className="text-sm text-gray-500 mt-1">alumnos sin calificación</p>
             </div>
+          </div>
+        )}
+
+        {/* Exportar (todos los profesores) */}
+        {!loading && !profesorDetalle && porProfesor.length > 0 && (
+          <div className="flex flex-wrap gap-3 mb-6">
+            <button
+              onClick={handleExportarExcelGeneral}
+              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all"
+            >
+              <FontAwesomeIcon icon={faFileExcel} />
+              Exportar Excel (todos)
+            </button>
+            <button
+              onClick={handleExportarPDFGeneral}
+              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all"
+            >
+              <FontAwesomeIcon icon={faFilePdf} />
+              Exportar PDF (todos)
+            </button>
           </div>
         )}
 
@@ -313,6 +741,23 @@ export default function PendientesCalificaciones() {
               <span className="inline-flex items-center justify-center min-w-10 h-10 px-3 rounded-full bg-red-100 text-red-700 font-bold">
                 {profesorDetalle.totalAlumnos}
               </span>
+            </div>
+
+            <div className="flex flex-wrap gap-3 mb-6">
+              <button
+                onClick={handleExportarExcelProfesor}
+                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all"
+              >
+                <FontAwesomeIcon icon={faFileExcel} />
+                Exportar Excel
+              </button>
+              <button
+                onClick={handleExportarPDFProfesor}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all"
+              >
+                <FontAwesomeIcon icon={faFilePdf} />
+                Exportar PDF
+              </button>
             </div>
 
             <div className="flex flex-col gap-4">
