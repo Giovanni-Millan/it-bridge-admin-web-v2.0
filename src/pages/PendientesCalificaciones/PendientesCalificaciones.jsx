@@ -2,14 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { supabase } from "../../components/supabaseClient.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faArrowLeft,
-  faMagnifyingGlass,
-  faChevronDown,
-  faChevronUp,
-  faUserGraduate,
-  faBook,
-} from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faMagnifyingGlass, faUserGraduate, faBook } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 
 const TIPOS = [
@@ -34,7 +27,7 @@ export default function PendientesCalificaciones() {
   const [busqueda, setBusqueda] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState("");
   const [periodoFiltro, setPeriodoFiltro] = useState("");
-  const [profesorExpandido, setProfesorExpandido] = useState(null);
+  const [profesorSeleccionado, setProfesorSeleccionado] = useState(null);
 
   useEffect(() => {
     cargar();
@@ -195,9 +188,7 @@ export default function PendientesCalificaciones() {
     setTipoFiltro("");
   };
 
-  const toggleProfesor = (id_profesor) => {
-    setProfesorExpandido((actual) => (actual === id_profesor ? null : id_profesor));
-  };
+  const profesorDetalle = porProfesor.find((p) => p.id_profesor === profesorSeleccionado) || null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -301,65 +292,84 @@ export default function PendientesCalificaciones() {
               "Ningún resultado coincide con los filtros."
             )}
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {porProfesor.map((prof) => {
-              const expandido = profesorExpandido === prof.id_profesor;
+        ) : profesorDetalle ? (
+          <div>
+            <button
+              onClick={() => setProfesorSeleccionado(null)}
+              className="inline-flex items-center gap-2 bg-white text-purple-700 font-semibold px-5 py-2.5 rounded-xl shadow-sm hover:bg-purple-50 border border-purple-200 transition-all duration-200 w-fit mb-6"
+            >
+              <FontAwesomeIcon icon={faArrowLeft} />
+              <span>Regresar a la lista de profesores</span>
+            </button>
 
-              return (
-                <div key={prof.id_profesor} className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-                  <button
-                    onClick={() => toggleProfesor(prof.id_profesor)}
-                    className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left hover:bg-purple-50 transition"
-                  >
-                    <div>
-                      <p className="font-semibold text-gray-800">{prof.profesorNombre}</p>
-                      <p className="text-sm text-gray-500 mt-0.5">
-                        {prof.asignaciones.length} materia{prof.asignaciones.length === 1 ? "" : "s"} con huecos ·{" "}
-                        {prof.totalAlumnos} alumno{prof.totalAlumnos === 1 ? "" : "s"} sin calificación
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-red-100 text-red-700 font-bold text-sm">
-                        {prof.totalAlumnos}
-                      </span>
-                      <FontAwesomeIcon icon={expandido ? faChevronUp : faChevronDown} className="text-gray-400" />
-                    </div>
-                  </button>
+            <div className="bg-white rounded-2xl shadow-md p-6 mb-6 border border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800">{profesorDetalle.profesorNombre}</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {profesorDetalle.asignaciones.length} materia{profesorDetalle.asignaciones.length === 1 ? "" : "s"} con
+                  huecos
+                </p>
+              </div>
+              <span className="inline-flex items-center justify-center min-w-10 h-10 px-3 rounded-full bg-red-100 text-red-700 font-bold">
+                {profesorDetalle.totalAlumnos}
+              </span>
+            </div>
 
-                  {expandido && (
-                    <div className="border-t border-gray-100 bg-gray-50 px-6 py-4 flex flex-col gap-4">
-                      {prof.asignaciones.map((asig) => (
-                        <div key={asig.clave} className="bg-white rounded-xl border border-gray-200 p-4">
-                          <div className="flex items-center gap-2 mb-1">
-                            <FontAwesomeIcon icon={faBook} className="text-purple-500 text-sm" />
-                            <p className="font-semibold text-gray-800">{asig.materia}</p>
-                          </div>
-                          <p className="text-xs text-gray-500 mb-3">
-                            {asig.grupoNombre} · {asig.carreraNombre}
-                          </p>
+            <div className="flex flex-col gap-4">
+              {profesorDetalle.asignaciones.map((asig) => (
+                <div key={asig.clave} className="bg-white rounded-2xl shadow-md border border-gray-100 p-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FontAwesomeIcon icon={faBook} className="text-purple-500" />
+                    <p className="font-semibold text-gray-800 text-lg">{asig.materia}</p>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-4">
+                    {asig.grupoNombre} · {asig.carreraNombre}
+                  </p>
 
-                          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            {asig.alumnos.map((al) => (
-                              <li
-                                key={al.correo}
-                                className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-1.5"
-                              >
-                                <FontAwesomeIcon icon={faUserGraduate} className="text-gray-400 text-xs" />
-                                <span>
-                                  {al.nombre}
-                                  <span className="text-gray-400"> — {al.correo}</span>
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {asig.alumnos.map((al) => (
+                      <li
+                        key={al.correo}
+                        className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-1.5"
+                      >
+                        <FontAwesomeIcon icon={faUserGraduate} className="text-gray-400 text-xs" />
+                        <span>
+                          {al.nombre}
+                          <span className="text-gray-400"> — {al.correo}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {porProfesor.map((prof) => (
+              <button
+                key={prof.id_profesor}
+                onClick={() => setProfesorSeleccionado(prof.id_profesor)}
+                className="group bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-purple-100 hover:border-purple-300 flex flex-col items-center text-center"
+              >
+                <div className="relative mb-4">
+                  <div className="bg-purple-100 rounded-full p-4 group-hover:bg-purple-200 transition">
+                    <FontAwesomeIcon icon={faUserGraduate} className="text-3xl text-purple-700" />
+                  </div>
+                  <span className="absolute -bottom-1 -right-1 min-w-6 h-6 px-1.5 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center border-2 border-white">
+                    {prof.totalAlumnos}
+                  </span>
+                </div>
+
+                <h4 className="text-lg font-semibold text-gray-800 mb-1">{prof.profesorNombre}</h4>
+                <p className="text-gray-500 text-sm">
+                  {prof.asignaciones.length} materia{prof.asignaciones.length === 1 ? "" : "s"} con huecos
+                </p>
+                <p className="text-red-600 text-sm font-semibold mt-1">
+                  {prof.totalAlumnos} alumno{prof.totalAlumnos === 1 ? "" : "s"} sin calificación
+                </p>
+              </button>
+            ))}
           </div>
         )}
       </div>
