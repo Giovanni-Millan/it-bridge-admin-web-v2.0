@@ -14,7 +14,8 @@ import {
   faKey,
   faBook,
   faClockRotateLeft,
-  faLock
+  faLock,
+  faClipboardList
 } from '@fortawesome/free-solid-svg-icons';
 
 import { Link } from 'react-router-dom';
@@ -293,6 +294,11 @@ export default function Dashboard() {
         <Link to="/Candados" className="bg-purple-800 text-white rounded-2xl py-10 flex flex-col items-center">
           <FontAwesomeIcon icon={faLock} className="text-6xl" />
           Candados
+        </Link>
+
+        <Link to="/PendientesCalificaciones" className="bg-purple-800 text-white rounded-2xl py-10 flex flex-col items-center">
+          <FontAwesomeIcon icon={faClipboardList} className="text-6xl" />
+          Pendientes de Calificaciones
         </Link>
 
       </section>

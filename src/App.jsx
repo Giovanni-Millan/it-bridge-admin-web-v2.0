@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard/Dashboard'
 import CambiarPassword from "./pages/Dashboard/CambiarPassword";
 import NotFound from './pages/NotFound/NotFound'
 import Candados from "./pages/Candados/Candados";
+import PendientesCalificaciones from "./pages/PendientesCalificaciones/PendientesCalificaciones";
 import CrearAvisos from './pages/CrearAvisos/CrearAvisos'
 import InscribirAlumnos from './pages/InscribirAlumnos/InscribirAlumnos'
 import ConsultarGrupos from './pages/ConsultarGrupos/ConsultarGrupos'
@@ -153,6 +154,7 @@ function App() {
         <Route path='/dashboard' Component={Dashboard}/>
         <Route path="/CambiarPassword" Component={CambiarPassword} />
         <Route path="/Candados" Component={Candados} />
+        <Route path="/PendientesCalificaciones" Component={PendientesCalificaciones} />
         <Route path='/CrearAvisos' Component={CrearAvisos}/>
         <Route path='/InscribirAlumnos' Component={InscribirAlumnos}/>
         <Route path='/ConsultarGrupos' Component={ConsultarGrupos}/>
