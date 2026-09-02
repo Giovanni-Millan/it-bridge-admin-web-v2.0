@@ -7,6 +7,15 @@ import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 
+// Alta y edición de grupo en un solo componente: rutas /Grupos/Crear y
+// /Grupos/Editar/:id_grupo apuntan aquí, `modoEdicion` (si vino id_grupo
+// por la URL) decide si precarga datos existentes y hace UPDATE en vez de
+// INSERT. El formulario cambia de campos según el "Nivel educativo"
+// elegido (universidad=cuatrimestre, bachillerato=semestre,
+// autoplaneado=solo periodo/año) — ver `handleTipoChange` y
+// `carrerasFiltradas` para cómo se filtra el catálogo de carreras según
+// el tipo (las de Bachillerato/Autoplaneado están marcadas con ese prefijo
+// en el nombre, no hay una columna separada para distinguirlas).
 export default function CrearGrupo() {
   const navigate = useNavigate();
   const { id_grupo } = useParams();
@@ -91,6 +100,12 @@ export default function CrearGrupo() {
     setFormData({ ...formData, tipo, id_carrera: "", cuatrimestre: "", semestre: "", periodo: "", anio: "" });
   };
 
+  // OJO al reusar este formulario para crear un "grupo de regularización"
+  // (materia puntual compartida entre carreras, ver ARQUITECTURA_SISTEMA.md
+  // §9): id_carrera/cuatrimestre/semestre quedan NULL si el campo se deja
+  // vacío, y eso es justo lo que ese patrón necesita — el trigger de la BD
+  // que sincroniza la carrera del alumno al inscribirlo usa `coalesce`, así
+  // que un grupo con estos campos en NULL no le pisa nada al alumno.
   const handleSubmit = async (event) => {
     event.preventDefault();
     setGuardando(true);

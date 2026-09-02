@@ -6,6 +6,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../components/supabaseClient.js";
 import Avatar from "../../components/Avatar.jsx";
 
+// Punto de entrada al Historial Académico: lista TODOS los alumnos (no
+// solo los que ya tienen historial capturado) con buscador; al elegir uno
+// se navega a DetalleHistorialAcademico.jsx con su registro permanente
+// completo.
 export default function ListarAlumnosHistorial() {
   const navigate = useNavigate();
 

@@ -23,8 +23,15 @@ const CLASES_ESTADO = {
   justificado: "bg-blue-100 text-blue-700",
 };
 
+// Formatea la fecha de hoy como YYYY-MM-DD (truco: el locale sueco "sv-SE"
+// de toLocaleDateString ya usa ese formato) — sirve para comparar contra
+// `fecha` (columna date de Postgres) sin líos de huso horario.
 const hoyISO = () => new Date().toLocaleDateString("sv-SE");
 
+// Consulta de asistencia de un grupo (solo lectura para el admin — tomar
+// asistencia en sí es tarea del docente, desde su propio portal). Lee de
+// `vista_asistencias` (ya trae nombres de alumno y profesor resueltos, no
+// solo IDs), filtrable por fecha, con export a PDF/Excel.
 export default function ConsultarAsistencia() {
   const { id_grupo } = useParams();
   const navigate = useNavigate();

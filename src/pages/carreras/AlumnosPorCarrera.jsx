@@ -7,6 +7,13 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Swal from "sweetalert2";
 
+// Listado de alumnos de UNA carrera específica (id_carrera en la URL, ya
+// filtra por `alumnos.id_carrera` directo — no por grupo). Búsqueda +
+// filtro por cuatrimestre, y export a PDF/Excel con el diseño más formal
+// del proyecto (encabezado con marca, filtros aplicados, tabla con
+// theme "striped", pie de página con numeración — este archivo fue la
+// referencia que se copió para el export de otras pantallas, como
+// PendientesCalificaciones.jsx).
 export default function AlumnosPorCarrera() {
   const { id } = useParams();
   const location = useLocation();

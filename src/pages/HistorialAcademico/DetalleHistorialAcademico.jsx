@@ -16,6 +16,11 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Avatar from "../../components/Avatar.jsx";
 
+// Historial académico completo de un alumno: lee `historial_academico`, el
+// registro PERMANENTE de calificaciones finales (sobrevive aunque el grupo
+// o la materia original se borren después — no es lo mismo que consultar
+// `calificaciones` directo). Calcula el promedio general en el cliente y
+// exporta a PDF.
 export default function DetalleHistorialAcademico() {
   const { id } = useParams();
   const navigate = useNavigate();

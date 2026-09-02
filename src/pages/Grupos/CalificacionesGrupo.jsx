@@ -5,6 +5,12 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faBook, faUserGraduate, faLock, faLockOpen } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+// Resumen "capturado vs. total" por materia de un grupo — clic en una
+// materia lleva a CalificacionesGrupoMateria.jsx para ver/editar el detalle
+// alumno por alumno. Es el mismo cálculo que después se generalizó a TODOS
+// los grupos en PendientesCalificaciones.jsx (1-sep-2026), pero aquí acotado
+// a un solo grupo. Distingue bachillerato (tabla `calificaciones_parciales`)
+// de universidad/autoplaneado (tabla `calificaciones`) — ver el `if` de abajo.
 export default function CalificacionesGrupo() {
   const { id_grupo } = useParams();
   const navigate = useNavigate();

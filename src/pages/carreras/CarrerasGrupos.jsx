@@ -17,6 +17,13 @@
     FaUniversity,
     } from "react-icons/fa";
 
+    // Landing de "Consultar Grupos" (ruta /carreras, el botón del Dashboard
+    // con ese mismo nombre): agrupa el catálogo de `carrera` en 4 tarjetones
+    // por modalidad (escolarizada/sabatina/dominical/virtual), deducida del
+    // propio nombre de la carrera (todas siguen el patrón "Carrera -
+    // Modalidad"). Al elegir una carrera navega a AlumnosPorCarrera.jsx.
+    // El ícono junto a cada carrera es solo estético, elegido por
+    // coincidencia de palabras clave en el nombre (obtenerIconoCarrera).
     export default function CarrerasGrupos() {
     const [carreras, setCarreras] = useState([]);
     const [loading, setLoading] = useState(true);

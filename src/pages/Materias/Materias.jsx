@@ -7,6 +7,11 @@ import { faArrowLeft, faPlus, faTrash, faSearch, faBook } from "@fortawesome/fre
 import { Link } from "react-router-dom";
 import Swal from "sweetalert2";
 
+// CRUD del catálogo de materias, agrupado por área (Bachillerato + cada
+// carrera de universidad). Es solo un catálogo DE REFERENCIA para el
+// autocompletado al asignar profesor a un grupo (ver DetalleGrupo.jsx) —
+// `grupo_profesores.materia` es texto libre, sin FK real hacia esta tabla,
+// así que borrar una materia de aquí no afecta asignaciones que ya la usen.
 export default function Materias() {
   const [materias, setMaterias] = useState([]);
   const [areas, setAreas] = useState([]);

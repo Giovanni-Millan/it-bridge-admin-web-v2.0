@@ -22,6 +22,13 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import Avatar from "../../components/Avatar.jsx";
 
+// Pantalla central para armar un grupo: inscribir/quitar alumnos, asignar/
+// quitar profesores con su materia, y editar la materia de una asignación
+// ya existente. Todas las escrituras a grupo_alumnos/grupo_profesores usan
+// insertRows/updateRows/deleteRows de adminApi.js — no hay alternativa:
+// esas 2 tablas no tienen ninguna política RLS de escritura para el rol
+// admin, así que un `supabase.from(...).insert()` directo aquí fallaría
+// siempre (ver ARQUITECTURA_SISTEMA.md §1.4).
 export default function DetalleGrupo() {
   const { id_grupo } = useParams();
   const navigate = useNavigate();
@@ -153,6 +160,9 @@ export default function DetalleGrupo() {
 
       alumnosData = (data || []).map((a) => ({ ...a, carrera_nombre: a.carrera?.nombre }));
     } else {
+      // Bachillerato (o cualquier grupo con carrera fija): solo alumnos de
+      // ESA carrera específica, ya cursando (cuatrimestre > 0 — un alumno
+      // recién dado de alta sin grupo todavía tiene cuatrimestre 0/null).
       if (!grupo?.id_carrera) {
         Swal.fire("Falta carrera", "Este grupo no tiene una carrera asignada.", "warning");
         return;

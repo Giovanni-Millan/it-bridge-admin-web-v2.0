@@ -16,6 +16,11 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 
+// Listado de todos los grupos (CRUD "nuevo", el que sí está activo — no
+// confundir con las ~40 páginas legacy de "Consultar Grupos" por
+// carrera×modalidad). Lee de `vista_grupos_resumen`, que ya trae el nombre
+// de la carrera y los conteos de alumnos/profesores calculados en la
+// propia vista, sin tener que hacerlos aquí.
 export default function Grupos() {
   const navigate = useNavigate();
   const [grupos, setGrupos] = useState([]);
@@ -44,6 +49,15 @@ export default function Grupos() {
     setLoading(false);
   };
 
+  // Borrar un grupo se lleva de encuentro (ON DELETE CASCADE en la BD) sus
+  // inscripciones de alumnos/profesores, asistencias y calificaciones
+  // parciales (bachillerato) — el texto de confirmación lo advierte porque
+  // no hay forma de deshacerlo desde la UI.
+  // OJO: `calificaciones` (universidad/autoplaneado) NO tiene cascade, es
+  // ON DELETE NO ACTION — si el grupo ya tiene alguna calificación
+  // capturada en esa tabla, este DELETE va a fallar con un error de
+  // restricción de la base (no un error "amigable"), aunque nada en esta
+  // pantalla lo distingue de cualquier otro error genérico.
   const handleEliminar = async (grupo) => {
     const result = await Swal.fire({
       title: `¿Eliminar "${grupo.nombre}"?`,

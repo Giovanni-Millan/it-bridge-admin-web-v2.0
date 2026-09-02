@@ -10,6 +10,14 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
+// Detalle de calificaciones de UNA materia de UN grupo, alumno por alumno.
+// El admin aquí NO captura calificaciones (no hay ningún input de nota) —
+// solo puede VER lo que el docente ya capturó, bloquear/desbloquear
+// (individual o "bloquear todas" de un golpe) y exportar a PDF/Excel. La
+// forma de esquema es distinta según el tipo de grupo: bachillerato trae 3
+// parciales por alumno (`calificaciones_parciales`) con su promedio
+// calculado en el cliente; universidad/autoplaneado trae una sola nota
+// (`calificaciones`).
 export default function CalificacionesGrupoMateria() {
   const { id_grupo, materia } = useParams();
   const materiaDecoded = decodeURIComponent(materia);
@@ -64,8 +72,12 @@ export default function CalificacionesGrupoMateria() {
     setFilas(ordenarPorApellido(Object.values(agrupado)));
   };
 
-  // ===== Universidad / Autoplaneado: "calificaciones" no tiene id_grupo,
-  // se relaciona por el correo del alumno (igual que hace el portal docente) =====
+  // ===== Universidad / Autoplaneado: tabla `calificaciones` =====
+  // Este comentario decía antes que la tabla "no tiene id_grupo" — ya no es
+  // cierto, desde el 27-ago-2026 sí lo tiene y el filtro de abajo
+  // (`.eq("id_grupo", id_grupo)`) ya lo usa correctamente; el correo se
+  // sigue usando además como llave de unión con el alumno, no en vez del
+  // id_grupo.
   const fetchCalificacionesUniversidad = async () => {
     const { data: alumnosGrupo } = await supabase
       .from("grupo_alumnos")
