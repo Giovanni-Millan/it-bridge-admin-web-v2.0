@@ -10,6 +10,13 @@ import Swal from "sweetalert2";
 // Búsqueda rápida de candados: pensada para cuando un profesor pide
 // VERBALMENTE que se desbloquee una calificación y el admin necesita
 // encontrarla ya, sin tener que recordar en qué grupo estaba.
+//
+// Lee de `vista_calificaciones_candados`, una vista que ya une en el
+// servidor las calificaciones de universidad/autoplaneado (tabla
+// `calificaciones`) con las de bachillerato (tabla `calificaciones_parciales`,
+// con su número de parcial) — por eso el filtro es solo `bloqueada = true`,
+// sin importar de qué tabla venga cada fila (`tabla_origen` guarda cuál,
+// se usa al desbloquear para saber en qué tabla escribir).
 export default function Candados() {
   const navigate = useNavigate();
 
@@ -60,6 +67,9 @@ export default function Candados() {
     return coincideAlumno && coincideCarrera && coincideProfesor;
   });
 
+  // `registro.tabla_origen` ("calificaciones" o "calificaciones_parciales")
+  // le dice a updateRows en qué tabla real escribir — la vista mezcla ambas,
+  // pero la escritura tiene que ir a la tabla correcta.
   const desbloquear = async (registro) => {
     const nombreCompleto = `${registro.alumno_nombre} ${registro.alumno_apellido_paterno} ${registro.alumno_apellido_materno || ""}`.trim();
 

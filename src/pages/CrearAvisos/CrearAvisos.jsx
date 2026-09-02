@@ -1,3 +1,10 @@
+// Formulario simple de alta de avisos: título + descripción, se insertan
+// en la tabla `avisos` con `supabase` directo (anon key) — no pasa por
+// adminApi.js porque la política RLS de `avisos` ya le permite INSERT al
+// rol admin sin necesitar la service role key. Los avisos publicados aquí
+// los ven docente/alumno/psicólogo (`avisos` es un canal compartido de
+// comunicación entre los 4 portales); verlos/borrarlos desde el admin es
+// en Dashboard.jsx, no en esta pantalla.
 import React, { useState } from 'react'
 import Navbar from '../../components/Navbar'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

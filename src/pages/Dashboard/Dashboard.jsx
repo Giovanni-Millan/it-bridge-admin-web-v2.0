@@ -1,3 +1,9 @@
+// Hub central del admin (ruta /dashboard): grilla de accesos directos a
+// cada sección del portal, el switch global de "captura de calificaciones"
+// (activa/desactiva que los docentes puedan capturar notas), y el panel
+// de avisos (crear los avisos vive en otra pantalla, aquí solo se ven/
+// eliminan). No trae lógica de negocio compleja — es sobre todo navegación
+// + 2 fetches simples (avisos, configuración) + 1 escritura (el switch).
 import React, { useEffect, useState } from 'react'
 import Navbar from '../../components/Navbar'
 
@@ -165,6 +171,13 @@ export default function Dashboard() {
   /* ============================= */
   /* SWITCH: CAPTURA DE CALIFICACIONES */
   /* ============================= */
+  // `configuracion_sistema` es una tabla de una sola fila (id=1) con 2
+  // switches globales: este (`captura_calificaciones_habilitada`, lo
+  // controla el admin) y otro que controla el psicólogo desde su propio
+  // portal (seguimiento emocional — no vive aquí). Apagar este switch hace
+  // que los docentes ya no puedan capturar/corregir notas desde su portal,
+  // sin importar si la calificación individual está bloqueada o no (es un
+  // candado maestro, además de los candados por calificación de Candados.jsx).
 
   const fetchConfiguracion = async () => {
     const { data, error } = await supabase
@@ -178,6 +191,9 @@ export default function Dashboard() {
     }
   };
 
+  // updateRows pasa por la Edge Function admin-api (no por RLS directo) —
+  // ver adminApi.js. Optimista solo después de confirmar éxito: si falla,
+  // el switch visualmente no cambia (no se actualiza el estado local).
   const handleToggleCaptura = async () => {
     const nuevoValor = !capturaHabilitada;
     setActualizandoCaptura(true);

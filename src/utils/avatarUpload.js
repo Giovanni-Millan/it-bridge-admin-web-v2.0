@@ -1,3 +1,9 @@
+// Capa fina sobre adminApi.js con nombres en español (subirAvatar/
+// eliminarAvatar) y validación de rol — así las pantallas que suben fotos
+// (EditarUsuario, ModificarInfoAlumno, InscribirAlumnos, etc.) no llaman
+// directo a uploadAvatar/removeAvatar de adminApi.js, sino a estas dos
+// funciones. El trabajo real (llamar la Edge Function admin-api) vive en
+// adminApi.js; este archivo solo valida el rol antes de reenviar la llamada.
 import { uploadAvatar, removeAvatar } from "../components/adminApi";
 
 const ROLES_VALIDOS = new Set(["alumno", "docente", "psicologo", "admin"]);

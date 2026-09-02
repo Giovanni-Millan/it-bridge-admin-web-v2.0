@@ -1,3 +1,11 @@
+// Formulario de alta de alumnos. El correo y la contraseña se autogeneran
+// mientras se escribe el nombre/apellidos (convención de la escuela), pero
+// quedan editables por si hay que ajustarlos a mano. El alta real son 2
+// pasos independientes: 1) crear el usuario en Supabase Auth (vía la Edge
+// Function, rol "alumno"), 2) insertar su fila en la tabla `alumnos` con
+// `supabase` directo (la política RLS de esa tabla ya permite INSERT al
+// admin). Si el paso 2 falla, el usuario de Auth ya quedó creado — no hay
+// rollback automático del paso 1 aquí.
 import React, { useState } from "react";
 import Navbar from "../../components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

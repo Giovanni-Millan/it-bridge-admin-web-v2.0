@@ -1,3 +1,8 @@
+// Barra superior compartida por (casi) todas las pantallas del admin: logo
+// de Bridge a la izquierda + un título centrado/derecha que cada pantalla
+// le pasa por prop (`<Navbar titulo="Lo que sea" />`). Es puramente visual,
+// no trae navegación (no hay links/menú aquí) ni lógica de sesión — el
+// botón de "Cerrar sesión" vive en cada pantalla que lo necesita, no aquí.
 import React from 'react'
 import './navbar.css'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

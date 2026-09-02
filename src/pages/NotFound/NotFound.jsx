@@ -1,3 +1,6 @@
+// Página de respaldo para la ruta comodín `*` en App.jsx: cualquier URL que
+// no coincida con ninguna ruta declarada cae aquí en vez de dejar pantalla
+// en blanco (que es lo que pasaba antes de agregar esto, el 31-ago-2026).
 import React from "react";
 import { useNavigate } from "react-router-dom";
 

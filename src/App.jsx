@@ -1,3 +1,22 @@
+// Router raíz del portal admin: todas las rutas de la app viven aquí, en un
+// solo archivo (no hay routers anidados ni layouts por sección). El grueso
+// de las líneas de este archivo (imports + <Route> de "CONSULTAR GRUPOS" y
+// "MODIFICAR GRUPOS") es un patrón repetido 10 carreras × 4 modalidades —
+// ver ARQUITECTURA_SISTEMA.md §3.4 para el inventario completo categorizado
+// (qué está activo, qué es legacy) en vez de leerlo todo aquí línea por línea.
+//
+// Resumen rápido de qué es qué:
+//  - CONSULTAR GRUPOS (GrupoConsultado/*, ~40 rutas /Grupos<Carrera>...):
+//    LEGACY Y ROTO — llaman a un backend Express local (localhost:4000)
+//    que ya no existe. Siguen ruteadas y alcanzables desde /ConsultarGrupos,
+//    pero no van a traer datos reales.
+//  - MODIFICAR GRUPOS (ConsultarUsuarios/Grupos/*, ~40 rutas
+//    /ModificarGrupo<Carrera>...): SÍ ACTIVAS — cada una lista los alumnos
+//    de esa carrera/modalidad y enlaza a /ModificarInfoAlumno/:id (la
+//    pantalla real y activa de editar un alumno, incluida más abajo).
+//  - El resto de rutas (Dashboard, Grupos/*, ConsultarUsuarios, Candados,
+//    PendientesCalificaciones, Materias, carreras/*, HistorialAcademico)
+//    son el CRUD "nuevo" y activo.
 import {BrowserRouter as Router , Routes,Route} from 'react-router-dom'
 
 import "./App.css";

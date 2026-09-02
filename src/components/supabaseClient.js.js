@@ -1,53 +1,47 @@
+// Cliente(s) de Supabase para bridge-admin-web. Este archivo define DOS
+// exports: `supabase` (el cliente real, con la clave pública anon) y
+// `supabaseAdmin` (un cliente falso/trampa — ver comentario abajo).
+//
+// A diferencia de `bridge-admin` (la versión de escritorio con Tauri), esta
+// versión web NO trae ni debe traer nunca la Supabase Service Role Key en
+// el bundle: si se pusiera aquí, Vite la incrustaría tal cual en el JS que
+// se manda al navegador, y cualquier visitante podría extraerla desde las
+// devtools y obtener acceso total a la base de datos saltándose RLS.
+//
+// Las operaciones que sí necesitan esa key (crear/editar/banear usuarios
+// vía Auth Admin, escrituras que necesitan saltarse RLS, subir/borrar fotos
+// de perfil) pasan por la Edge Function `admin-api` (ver adminApi.js en
+// esta misma carpeta) — la key vive ahí, solo del lado del servidor, nunca
+// en el navegador.
+
 import { createClient } from "@supabase/supabase-js";
 
-/* ============================= */
-/* VARIABLES ENV */
-/* ============================= */
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL;
+// Cliente normal: login, y cualquier lectura/escritura protegida por RLS
+// (la mayoría de las pantallas lo usan directo para SELECT/INSERT/UPDATE
+// sencillos que la política de la tabla ya permite al rol admin).
+export const supabase = createClient(supabaseUrl, anonKey);
 
-const anonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-/* ============================= */
-/* CLIENTE NORMAL (LOGIN / CRUD) */
-/* ============================= */
-
-export const supabase =
-  createClient(
-    supabaseUrl,
-    anonKey
-  );
-
-/* ============================================================ */
-/* CLIENTE ADMIN (AUTH ADMIN) — DESHABILITADO EN LA VERSIÓN WEB  */
-/* ============================================================ */
-/*
- * A diferencia de bridge-admin (Tauri, escritorio), esta versión web
- * NO trae la Supabase Service Role Key en el bundle: si se incluyera
- * aquí, Vite la incrustaría tal cual en el JS que se manda al navegador
- * y cualquier visitante podría extraerla y obtener acceso total a la
- * base de datos, saltándose RLS.
- *
- * Las operaciones que antes usaban `supabaseAdmin` (crear/editar/borrar
- * usuarios vía Auth Admin, escrituras que necesitan saltarse RLS, subir
- * fotos de perfil) se están migrando a Edge Functions de Supabase, que
- * guardan la service role key solo del lado del servidor. Ver el plan,
- * fase 2.
- *
- * Mientras esa migración no esté lista para cada pantalla, cualquier
- * llamada a `supabaseAdmin` falla aquí con un error claro en vez de
- * romper toda la app al cargar (que es lo que pasaría si se intentara
- * crear el cliente con una key vacía).
- */
+// `supabaseAdmin` NO es un cliente real — es un Proxy que lanza error en
+// cualquier acceso (`supabaseAdmin.auth...`, `supabaseAdmin.storage...`,
+// lo que sea). Existe a propósito, como red de seguridad: si algún código
+// nuevo (o copiado sin querer de bridge-admin, donde este nombre SÍ es un
+// cliente real con la service role key) intenta usar `supabaseAdmin` aquí,
+// falla de inmediato con un mensaje claro en vez de:
+//   (a) romper toda la app al cargar si se intentara crear el cliente
+//       con una key vacía, o
+//   (b) fallar en silencio más adelante de forma confusa.
+// La forma correcta de hacer esa misma operación en este proyecto es
+// `adminApi.js` (createUser, updateRows, uploadAvatar, etc.).
 export const supabaseAdmin = new Proxy(
   {},
   {
     get(_target, prop) {
       throw new Error(
-        `supabaseAdmin.${String(prop)} no está disponible en bridge-admin-web todavía: ` +
-          "esta operación necesita migrarse a una Edge Function (ver plan, fase 2) antes de usarse aquí."
+        `supabaseAdmin.${String(prop)} no existe en bridge-admin-web: ` +
+          "usa las funciones de adminApi.js (createUser, insertRows, updateRows, uploadAvatar, ...) en su lugar."
       );
     },
   }

@@ -1,3 +1,7 @@
+// Pantalla de login del portal admin. Punto de entrada único (ruta "/"):
+// no hay registro propio aquí, las cuentas de admin las da de alta otro
+// admin ya existente (o se crean directo en la BD/dashboard de Supabase —
+// la Edge Function admin-api a propósito NO permite crear rol "admin").
 import React, { useState } from 'react';
 import logo from './../../assets/logo.png';
 import { supabase } from '../../components/supabaseClient.js';
@@ -8,6 +12,12 @@ export default function Login() {
   const [contraseña, setContraseña] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Autentica con Supabase Auth y, si el login es válido, verifica además
+  // que la cuenta tenga rol "admin" en app_metadata (no en user_metadata —
+  // esa distinción importa, ver convenciones en ARQUITECTURA_SISTEMA.md).
+  // Si alguien con credenciales válidas pero de OTRO rol (alumno, docente,
+  // psicólogo) intenta entrar aquí, se le cierra la sesión de inmediato y
+  // se le niega el acceso — cada portal valida su propio rol así.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);

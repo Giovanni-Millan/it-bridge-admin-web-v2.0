@@ -1,3 +1,7 @@
+// Formulario de alta de psicólogos — mismo patrón que InscribirAlumnos.jsx
+// e InscribirProfesor.jsx (correo/contraseña autogenerados y editables,
+// alta en 2 pasos: Auth con rol "psicologo" + fila en `psicologos`, vía
+// insertRows de adminApi.js).
 import React, { useState } from "react";
 import Navbar from "../../components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

@@ -1,3 +1,10 @@
+// Pantalla "Cambiar Contraseñas" (ruta /CambiarPassword): lista TODOS los
+// usuarios de Supabase Auth (de los 4 roles, no solo alumnos) y le permite
+// al admin fijarle una contraseña nueva a cualquiera, sin necesitar la
+// contraseña anterior. Nótese que el componente se llama `Usuarios` por
+// dentro (nombre heredado, no se renombró al mover la pantalla aquí) pero
+// la ruta y el propósito real son de cambio de contraseña, no de gestión
+// general de usuarios (esa es ConsultarUsuarios.jsx).
 import React, { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
 import Swal from "sweetalert2";
@@ -23,6 +30,9 @@ export default function Usuarios() {
   /* ============================= */
   /* OBTENER USUARIOS */
   /* ============================= */
+  // listUsers() (adminApi.js → Edge Function admin-api) trae la lista
+  // completa de Auth de los 4 roles — no hay paginación aquí, se trae todo
+  // de una vez y se filtra en el cliente (ver "FILTRAR USUARIOS" abajo).
 
   const fetchUsuarios = async () => {
 
@@ -76,6 +86,11 @@ export default function Usuarios() {
   /* ============================= */
   /* CAMBIAR PASSWORD */
   /* ============================= */
+  // Pide la contraseña nueva con un prompt de SweetAlert2 (con su propio
+  // inputValidator: no vacía, mínimo 6 caracteres — este bug de validación
+  // ASI de JS se corrigió el 31-ago-2026, el string ahora va en la misma
+  // línea que el `return`). Si se confirma, la actualiza de verdad en
+  // Supabase Auth vía updateUserById (adminApi.js → Edge Function).
 
   const handleCambiarPassword =
     async (usuario) => {

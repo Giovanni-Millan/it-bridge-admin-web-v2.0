@@ -1,3 +1,13 @@
+// Formulario de alta de profesores — mismo patrón que InscribirAlumnos.jsx
+// (correo/contraseña autogenerados, editables; alta en 2 pasos: Auth con
+// rol "docente" + fila en `profesores`). Única diferencia real: aquí el
+// paso 2 pasa por `insertRows` de adminApi.js en vez de `supabase` directo
+// (ambos caminos son válidos, la política RLS de `profesores` también deja
+// insertar al admin con la anon key — es solo inconsistencia de qué camino
+// se usó al escribir cada pantalla, no un bug).
+// `returnTo` (via location.state) permite volver a donde se vino —
+// DetalleGrupo.jsx enlaza aquí para dar de alta un profesor sin perder el
+// grupo que se estaba armando, y espera regresar ahí, no siempre a /Grupos.
 import React, { useState } from "react";
 import Navbar from "../../components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

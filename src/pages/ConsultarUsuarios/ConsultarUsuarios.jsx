@@ -1,3 +1,9 @@
+// Listado unificado de los 4 roles (alumno/docente/psicólogo/admin) en una
+// sola tabla — trae cada tabla de rol por separado (no hay una tabla
+// "usuarios" única) y las junta en el cliente, cruzando además el estado
+// real de baneo desde Auth (`listUsers`) para mostrar Activo/Inactivo.
+// Desde aquí se puede: buscar/filtrar por rol, editar (ver `editar` abajo)
+// y activar/desactivar el acceso de cualquiera.
 import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -96,6 +102,10 @@ export default function ConsultarUsuarios() {
     });
   }, [usuarios, busqueda, rolActivo]);
 
+  // Los alumnos tienen su propia pantalla de edición (ModificarInfoAlumno,
+  // con más campos académicos: carrera, cuatrimestre, tipo, etc.); los
+  // otros 3 roles comparten EditarUsuario.jsx (genérica, recibe el rol
+  // por la URL).
   const editar = (usuario) => {
     if (usuario.rol === "alumno") {
       navigate(`/ModificarInfoAlumno/${usuario.id}`);

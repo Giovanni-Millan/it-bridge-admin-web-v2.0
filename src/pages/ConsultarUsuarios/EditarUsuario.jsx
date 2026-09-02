@@ -9,6 +9,18 @@ import { supabase } from "../../components/supabaseClient.js";
 import { getUserById, updateUserById, updateRows } from "../../components/adminApi";
 import { subirAvatar } from "../../utils/avatarUpload.js";
 
+// Pantalla genérica de edición para docente/psicólogo/admin (ruta
+// /ConsultarUsuarios/Editar/:rol/:id — el alumno tiene su propia pantalla,
+// ModificarInfoAlumno.jsx, con más campos académicos). `CONFIG_POR_ROL`
+// es lo único que cambia entre los 3 roles: a qué tabla escribir, el
+// título de la pantalla, y si mostrar el campo teléfono (admin no lo tiene).
+//
+// Referencia del patrón CORRECTO para cambiar la contraseña real de un
+// usuario: el campo "Nueva contraseña" de este formulario SÍ llama a
+// updateUserById (Auth real), a diferencia del bug que tenía
+// ModificarInfoAlumno.jsx antes del 31-ago-2026 (guardaba la contraseña
+// como texto plano en la tabla, sin tocar Auth — ya corregido siguiendo
+// este mismo patrón).
 const CONFIG_POR_ROL = {
   docente: { tabla: "profesores", titulo: "Profesor", tieneTelefono: true },
   psicologo: { tabla: "psicologos", titulo: "Psicólogo", tieneTelefono: true },
@@ -157,6 +169,12 @@ export default function EditarUsuario() {
         payload.telefono = form.telefono || null;
       }
 
+      // 3 escrituras independientes: datos de contacto (siempre), password
+      // (solo si se escribió algo en ese campo) y correo de Auth (solo si
+      // hay correo — en la práctica siempre, ya es obligatorio arriba).
+      // El correo se actualiza en 2 lugares a propósito: en `payload` va a
+      // la tabla del rol (lo que se muestra en listados), y aquí además a
+      // Auth (con qué correo puede hacer login) — deben mantenerse iguales.
       const { error } = await updateRows(config.tabla, "id", id, payload);
 
       if (error) throw error;

@@ -1,3 +1,17 @@
+  // Pantalla REAL de edición de un alumno (a diferencia de EditarUsuario.jsx,
+  // que es solo para docente/psicólogo/admin). Se llega aquí desde
+  // ConsultarUsuarios.jsx y desde las ~40 páginas "Modificar grupo por
+  // carrera/modalidad" — es la única forma que tiene el admin de editar
+  // datos de un alumno o resetearle la contraseña de login.
+  //
+  // El campo de contraseña se corrigió el 31-ago-2026: antes tenía un
+  // input y un `useState` pero SIN ningún <input> real en el formulario
+  // (código muerto), y aunque lo hubiera tenido, guardaba el valor como
+  // texto plano en `alumnos.contraseña` en vez de tocar la contraseña real
+  // de Supabase Auth — se verificó con SQL que esa columna nunca se pobló
+  // en 287 filas, es un vestigio de esquema. Ahora si se escribe algo en
+  // ese campo, se llama a updateUserById (igual que EditarUsuario.jsx) y
+  // ya no se escribe nada en la columna vieja.
   import React, { useEffect, useState } from "react";
   import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
   import { faArrowLeft, faUserSlash, faUserCheck, faCamera, faTrash } from "@fortawesome/free-solid-svg-icons";
