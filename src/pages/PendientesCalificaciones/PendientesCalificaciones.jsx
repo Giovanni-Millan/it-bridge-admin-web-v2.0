@@ -452,6 +452,27 @@ function GraficaBarras({ datos }) {
   );
 }
 
+// Trae TODAS las filas de una tabla, sin importar cuántas sean. Supabase/
+// PostgREST corta cualquier select sin .range()/.limit() en 1000 filas por
+// defecto — invisible mientras las tablas eran chicas, pero `calificaciones`
+// ya pasó ese umbral (sept 2026) y las capturas más nuevas (las que quedan al
+// final) se estaban perdiendo silenciosamente, apareciendo como "pendientes"
+// aunque el profesor ya las hubiera guardado y bloqueado. Pagina en bloques
+// de 1000 hasta que una página regresa menos de lo pedido.
+async function traerTodo(tabla, columnas) {
+  const TAM_PAGINA = 1000;
+  let desde = 0;
+  let filas = [];
+  while (true) {
+    const { data, error } = await supabase.from(tabla).select(columnas).range(desde, desde + TAM_PAGINA - 1);
+    if (error) return { data: null, error };
+    filas = filas.concat(data || []);
+    if (!data || data.length < TAM_PAGINA) break;
+    desde += TAM_PAGINA;
+  }
+  return { data: filas, error: null };
+}
+
 // "Pendiente" = un alumno inscrito en un grupo (grupo_alumnos) cuya materia
 // tiene profesor asignado (grupo_profesores), pero no existe ninguna fila en
 // `calificaciones` (universidad/autoplaneado) ni `calificaciones_parciales`
@@ -487,15 +508,17 @@ export default function PendientesCalificaciones() {
       { data: calificaciones },
       { data: parciales },
     ] = await Promise.all([
-      supabase.from("vista_grupos_resumen").select("id_grupo, nombre, carrera_nombre, tipo, periodo, anio"),
-      supabase
-        .from("grupo_profesores")
-        .select("id_grupo, id_profesor, materia, profesores(id, nombre, apellido_paterno, apellido_materno)"),
-      supabase
-        .from("grupo_alumnos")
-        .select("id_grupo, id_alumno, alumnos(id, nombre, apellido_paterno, apellido_materno, correo)"),
-      supabase.from("calificaciones").select("id_grupo, materia, id_alumno"),
-      supabase.from("calificaciones_parciales").select("id_grupo, materia, id_alumno"),
+      traerTodo("vista_grupos_resumen", "id_grupo, nombre, carrera_nombre, tipo, periodo, anio"),
+      traerTodo(
+        "grupo_profesores",
+        "id_grupo, id_profesor, materia, profesores(id, nombre, apellido_paterno, apellido_materno)"
+      ),
+      traerTodo(
+        "grupo_alumnos",
+        "id_grupo, id_alumno, alumnos(id, nombre, apellido_paterno, apellido_materno, correo)"
+      ),
+      traerTodo("calificaciones", "id_grupo, materia, id_alumno"),
+      traerTodo("calificaciones_parciales", "id_grupo, materia, id_alumno"),
     ]);
 
     const gruposPorId = new Map((grupos || []).map((g) => [g.id_grupo, g]));
