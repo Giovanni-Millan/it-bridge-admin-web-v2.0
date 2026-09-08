@@ -87,6 +87,7 @@ export default function CalificacionesAlumno() {
         .select('*')
         .eq('id_alumno', id)
         .order('anio', { ascending: false })
+        .order('periodo', { ascending: true })
         .order('materia', { ascending: true });
 
       if (historialError) throw historialError;

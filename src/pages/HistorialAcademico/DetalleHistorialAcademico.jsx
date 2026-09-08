@@ -47,6 +47,7 @@ export default function DetalleHistorialAcademico() {
         .select("*")
         .eq("id_alumno", id)
         .order("anio", { ascending: false })
+        .order("periodo", { ascending: true })
         .order("materia", { ascending: true }),
     ]);
 
