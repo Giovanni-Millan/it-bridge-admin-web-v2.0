@@ -1,10 +1,14 @@
 // Edge Function: admin-api
 //
 // Reemplaza el uso directo de `supabaseAdmin` (Service Role Key) desde el
-// navegador en bridge-admin-web. La service role key nunca sale de este
-// servidor: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY se las inyecta
-// automáticamente la plataforma de Supabase a toda Edge Function, no hace
-// falta configurarlas a mano.
+// navegador en bridge-admin-web. La key admin nunca sale de este servidor:
+// SUPABASE_URL y SUPABASE_SECRET_KEYS se las inyecta automáticamente la
+// plataforma de Supabase a toda Edge Function, no hace falta configurarlas
+// a mano. Se usa la secret key nueva (`sb_secret_...`, bajo el nombre
+// "default") en vez de la legacy SUPABASE_SERVICE_ROLE_KEY (JWT) — mismo
+// alcance total (bypass RLS), pero rotable de forma independiente sin tocar
+// el JWT secret del proyecto (9-sep-2026, tras la filtración de la key vieja
+// embebida en bridge-admin/Tauri).
 //
 // Verifica en cada request que quien llama sea un admin real
 // (app_metadata.rol === "admin", el mismo criterio que usa Login.jsx),
@@ -17,7 +21,8 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_SECRET_KEYS = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
+const SERVICE_ROLE_KEY = SUPABASE_SECRET_KEYS["default"];
 
 // CORS: bridge-admin-web corre en el navegador (Netlify), así que toda
 // respuesta —incluida la de error— necesita estos headers, y el preflight
