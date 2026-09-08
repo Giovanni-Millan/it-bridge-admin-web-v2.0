@@ -15,6 +15,7 @@ import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import Swal from "sweetalert2";
 import { createUser, insertRows } from "../../components/adminApi";
+import { mostrarError } from "../../utils/errorTraductor";
 
 // Quita acentos y cualquier caracter que no sea letra, todo en minúsculas
 const normalizarTexto = (texto) =>
@@ -78,7 +79,7 @@ export default function InscribirProfesor() {
           rol: "docente",
         });
 
-      if (authError) throw new Error(authError.message);
+      if (authError) throw authError;
 
       const userId = userData.user.id;
 
@@ -94,7 +95,7 @@ export default function InscribirProfesor() {
         },
       ]);
 
-      if (profesorError) throw new Error(profesorError.message);
+      if (profesorError) throw profesorError;
 
       const nombreCompleto = `${formData.nombre} ${formData.apellido_paterno} ${formData.apellido_materno}`;
 
@@ -107,13 +108,7 @@ export default function InscribirProfesor() {
 
       navigate(returnTo);
     } catch (err) {
-      console.error("ERROR:", err);
-      Swal.fire({
-        title: "Error al registrar",
-        text: err.message,
-        icon: "error",
-        confirmButtonColor: "#d33",
-      });
+      mostrarError(err, "inscribir al profesor");
     }
   };
 

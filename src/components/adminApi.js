@@ -1,5 +1,6 @@
 import Swal from "sweetalert2";
 import { supabase } from "./supabaseClient.js";
+import { traducirError } from "../utils/errorTraductor.js";
 
 /*
  * Cliente para la Edge Function `admin-api` de Supabase: reemplaza el uso
@@ -75,7 +76,7 @@ async function call(action, payload) {
       error: {
         message: timedOut
           ? "La operación tardó demasiado y se canceló. Intenta de nuevo."
-          : networkErr.message || "Error de red",
+          : traducirError(networkErr).mensaje,
       },
     };
   } finally {
@@ -86,7 +87,10 @@ async function call(action, payload) {
   const body = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    return { data: null, error: { message: body.error || `Error ${res.status}` } };
+    return {
+      data: null,
+      error: { message: traducirError({ message: body.error || `Error ${res.status}` }).mensaje },
+    };
   }
 
   return { data: body, error: null };

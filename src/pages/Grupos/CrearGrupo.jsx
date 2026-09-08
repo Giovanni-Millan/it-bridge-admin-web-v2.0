@@ -6,6 +6,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
+import { mostrarError } from "../../utils/errorTraductor";
 
 // Alta y edición de grupo en un solo componente: rutas /Grupos/Crear y
 // /Grupos/Editar/:id_grupo apuntan aquí, `modoEdicion` (si vino id_grupo
@@ -135,14 +136,14 @@ export default function CrearGrupo() {
       if (modoEdicion) {
         const { error } = await updateRows("grupos", "id_grupo", id_grupo, payload);
 
-        if (error) throw new Error(error.message);
+        if (error) throw error;
       } else {
         const { data: userData } = await supabase.auth.getUser();
         const { data, error } = await insertRows("grupos", [
           { ...payload, created_by: userData?.user?.id ?? null },
         ]);
 
-        if (error) throw new Error(error.message);
+        if (error) throw error;
         idDestino = data[0].id_grupo;
       }
 
@@ -155,8 +156,7 @@ export default function CrearGrupo() {
 
       navigate(`/Grupos/Detalle/${idDestino}`);
     } catch (err) {
-      console.error(err);
-      Swal.fire(`Error al ${modoEdicion ? "actualizar" : "crear"} el grupo`, err.message, "error");
+      mostrarError(err, modoEdicion ? "actualizar el grupo" : "crear el grupo");
     } finally {
       setGuardando(false);
     }

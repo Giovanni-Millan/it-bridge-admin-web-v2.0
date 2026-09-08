@@ -9,6 +9,7 @@ import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { createUser, insertRows } from "../../components/adminApi";
+import { mostrarError } from "../../utils/errorTraductor";
 
 // Quita acentos y cualquier caracter que no sea letra, todo en minúsculas
 const normalizarTexto = (texto) =>
@@ -69,7 +70,7 @@ export default function InscribirPsicologo() {
           rol: "psicologo",
         });
 
-      if (authError) throw new Error(authError.message);
+      if (authError) throw authError;
 
       const userId = userData.user.id;
 
@@ -84,7 +85,7 @@ export default function InscribirPsicologo() {
         },
       ]);
 
-      if (psicologoError) throw new Error(psicologoError.message);
+      if (psicologoError) throw psicologoError;
 
       const nombreCompleto = `${formData.nombre} ${formData.apellido_paterno} ${formData.apellido_materno}`;
 
@@ -97,13 +98,7 @@ export default function InscribirPsicologo() {
 
       navigate("/Dashboard");
     } catch (err) {
-      console.error("ERROR:", err);
-      Swal.fire({
-        title: "Error al registrar",
-        text: err.message,
-        icon: "error",
-        confirmButtonColor: "#d33",
-      });
+      mostrarError(err, "inscribir al psicólogo");
     }
   };
 

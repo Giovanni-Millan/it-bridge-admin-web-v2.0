@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 import { supabase } from "../../components/supabaseClient.js";
 import { getUserById, updateUserById, updateRows } from "../../components/adminApi";
 import { subirAvatar } from "../../utils/avatarUpload.js";
+import { mostrarError } from "../../utils/errorTraductor.js";
 
 // Pantalla genérica de edición para docente/psicólogo/admin (ruta
 // /ConsultarUsuarios/Editar/:rol/:id — el alumno tiene su propia pantalla,
@@ -63,7 +64,7 @@ export default function EditarUsuario() {
         .single();
 
       if (error) {
-        Swal.fire("Error", error.message, "error");
+        mostrarError(error, "consultar al usuario");
         setCargando(false);
         return;
       }
@@ -194,8 +195,7 @@ export default function EditarUsuario() {
       navigate(-1);
 
     } catch (err) {
-      console.error(err);
-      Swal.fire("Error", err.message || "No se pudo actualizar la información", "error");
+      mostrarError(err, "actualizar la información del usuario");
     }
 
   };

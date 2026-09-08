@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../../../components/Navbar';
 import Swal from 'sweetalert2';
 import { supabase } from '../../../components/supabaseClient.js'; // Ajusta la ruta según tu proyecto
+import { mostrarError } from '../../../utils/errorTraductor.js';
 
 export default function SubirCalificaciones() {
   const navigate = useNavigate();
@@ -675,12 +676,7 @@ const handleCarreraChange = (e) => {
 
 
     } catch (err) {
-      console.error(err);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error al registrar',
-        text: err.message || 'Ocurrió un problema al registrar la calificación.',
-      });
+      mostrarError(err, 'subir las calificaciones');
     }
   };
 

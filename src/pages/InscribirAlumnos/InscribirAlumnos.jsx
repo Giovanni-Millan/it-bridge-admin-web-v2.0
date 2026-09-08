@@ -14,6 +14,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { supabase } from "../../components/supabaseClient.js";
 import { createUser } from "../../components/adminApi";
+import { mostrarError } from "../../utils/errorTraductor";
 
 // Quita acentos y cualquier caracter que no sea letra, todo en minúsculas
 const normalizarTexto = (texto) =>
@@ -88,7 +89,7 @@ export default function InscribirAlumnos() {
 
       if (authError) {
 
-        throw new Error(authError.message);
+        throw authError;
 
       }
 
@@ -135,7 +136,7 @@ export default function InscribirAlumnos() {
 
       if (alumnoError) {
 
-        throw new Error(alumnoError.message);
+        throw alumnoError;
 
       }
 
@@ -159,14 +160,7 @@ export default function InscribirAlumnos() {
 
     catch (err) {
 
-      console.error("ERROR:", err);
-
-      Swal.fire({
-        title: "Error al registrar",
-        text: err.message,
-        icon: "error",
-        confirmButtonColor: "#d33"
-      });
+      mostrarError(err, "inscribir al alumno");
 
     }
 

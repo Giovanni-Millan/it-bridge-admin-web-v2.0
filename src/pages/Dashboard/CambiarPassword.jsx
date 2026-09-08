@@ -9,6 +9,7 @@ import React, { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
 import Swal from "sweetalert2";
 import { listUsers, updateUserById } from "../../components/adminApi";
+import { mostrarError } from "../../utils/errorTraductor";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -51,14 +52,7 @@ export default function Usuarios() {
 
     } catch (error) {
 
-      console.error("Error al obtener usuarios:", error);
-
-      Swal.fire(
-        "Error",
-        error.message ||
-        "No se pudieron obtener los usuarios",
-        "error"
-      );
+      mostrarError(error, "obtener los usuarios");
 
     }
 
@@ -186,17 +180,7 @@ export default function Usuarios() {
 
       } catch (error) {
 
-        console.error(
-          "Error al cambiar password:",
-          error
-        );
-
-        Swal.fire(
-          "Error",
-          error.message ||
-          "No se pudo actualizar la contraseña",
-          "error"
-        );
+        mostrarError(error, "actualizar la contraseña");
 
       }
 

@@ -22,6 +22,7 @@
   import { supabase } from "../../../components/supabaseClient.js";
   import { getUserById, updateUserById } from "../../../components/adminApi";
   import { subirAvatar, eliminarAvatar } from "../../../utils/avatarUpload.js";
+  import { mostrarError, traducirError } from "../../../utils/errorTraductor.js";
 
   export default function ModificarInfoAlumno() {
 
@@ -109,13 +110,7 @@
 
         if (error) {
 
-          console.error("Error al consultar:", error);
-
-          Swal.fire(
-            "Error",
-            error.message,
-            "error"
-          );
+          mostrarError(error, "consultar al alumno");
 
           return;
 
@@ -334,13 +329,7 @@
 
         if (error) {
 
-          console.error("Error al actualizar:", error);
-
-          Swal.fire(
-            "Error",
-            error.message,
-            "error"
-          );
+          mostrarError(error, "actualizar los datos del alumno");
 
           return;
 
@@ -354,11 +343,11 @@
 
           if (passError) {
 
-            console.error("Error al cambiar contraseña:", passError);
+            const { mensaje } = traducirError(passError, "cambiar la contraseña");
 
             Swal.fire(
               "Datos actualizados, pero la contraseña no se pudo cambiar",
-              passError.message,
+              mensaje,
               "warning"
             );
 
