@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { supabase } from "../../components/supabaseClient.js";
 import { insertRows, updateRows, deleteRows } from "../../components/adminApi";
@@ -45,6 +45,7 @@ export default function DetalleGrupo() {
 
   const [panelProfesores, setPanelProfesores] = useState(false);
   const [profesoresDisponibles, setProfesoresDisponibles] = useState([]);
+  const [busquedaProfesores, setBusquedaProfesores] = useState("");
   const [materiaInputs, setMateriaInputs] = useState({});
   const [catalogoMaterias, setCatalogoMaterias] = useState([]);
   const [editandoMateriaId, setEditandoMateriaId] = useState(null);
@@ -273,8 +274,20 @@ export default function DetalleGrupo() {
 
     setProfesoresDisponibles(data || []);
     setMateriaInputs({});
+    setBusquedaProfesores("");
     setPanelProfesores(true);
   };
+
+  // Filtro en vivo (sin botón de buscar) por nombre completo o correo —
+  // mismo patrón de búsqueda instantánea que el resto del admin.
+  const profesoresFiltrados = useMemo(() => {
+    const termino = busquedaProfesores.trim().toLowerCase();
+    if (!termino) return profesoresDisponibles;
+    return profesoresDisponibles.filter((p) => {
+      const nombreCompleto = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ""}`.toLowerCase();
+      return nombreCompleto.includes(termino) || (p.correo || "").toLowerCase().includes(termino);
+    });
+  }, [profesoresDisponibles, busquedaProfesores]);
 
   // Materias que ya imparte cada profesor en este mismo grupo (para mostrarlas como referencia)
   const materiasPorProfesor = (id_profesor) =>
@@ -777,14 +790,37 @@ export default function DetalleGrupo() {
               </button>
             </div>
 
+            {profesoresDisponibles.length > 0 && (
+              <div className="px-4 pt-4">
+                <div className="relative">
+                  <FontAwesomeIcon
+                    icon={faSearch}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"
+                  />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Buscar por nombre o correo..."
+                    value={busquedaProfesores}
+                    onChange={(e) => setBusquedaProfesores(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-4">
               {profesoresDisponibles.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">
                   No hay profesores disponibles para asignar.
                 </p>
+              ) : profesoresFiltrados.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">
+                  Ningún profesor coincide con "{busquedaProfesores}".
+                </p>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {profesoresDisponibles.map((profesor) => {
+                  {profesoresFiltrados.map((profesor) => {
                     const materiasActuales = materiasPorProfesor(profesor.id);
                     return (
                       <li key={profesor.id} className="py-3">
