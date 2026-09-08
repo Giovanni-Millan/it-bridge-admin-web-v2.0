@@ -97,6 +97,20 @@ export default function Candados() {
     setRegistros((prev) => prev.filter((r) => r.id !== registro.id));
   };
 
+  // `fecha_captura` viene de la vista ya resuelta como COALESCE de la fecha
+  // de registro más la de actualización (ver comentario del `SELECT` arriba) —
+  // siempre es "cuándo quedó registrada por última vez esta calificación".
+  const formatearFecha = (fecha) => {
+    if (!fecha) return "—";
+    return new Date(fecha).toLocaleString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const limpiarFiltros = () => {
     setBusquedaAlumno("");
     setCarreraFiltro("");
@@ -193,6 +207,7 @@ export default function Candados() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Profesor</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Grupo</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider w-28">Calificación</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">Registrada</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider w-36">Acción</th>
                 </tr>
               </thead>
@@ -215,6 +230,7 @@ export default function Candados() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{r.grupo_nombre || "—"}</td>
                     <td className="px-4 py-3 text-center font-semibold text-gray-900">{r.calificacion}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatearFecha(r.fecha_captura)}</td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => desbloquear(r)}
