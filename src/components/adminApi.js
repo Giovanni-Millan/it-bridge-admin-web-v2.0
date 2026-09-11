@@ -1,6 +1,5 @@
 import Swal from "sweetalert2";
 import { supabase } from "./supabaseClient.js";
-import { traducirError } from "../utils/errorTraductor.js";
 
 /*
  * Cliente para la Edge Function `admin-api` de Supabase: reemplaza el uso
@@ -70,13 +69,22 @@ async function call(action, payload) {
       signal: controller.signal,
     });
   } catch (networkErr) {
+    // Nota: este error se devuelve tal cual (no se traduce aquí) porque
+    // todas las páginas que consumen adminApi.js y muestran error.message
+    // al usuario ya pasan el resultado por traducirError/mostrarError
+    // (ver src/utils/errorTraductor.js). Traducirlo aquí también causaría
+    // doble traducción: el texto ya en español no matchea el diccionario
+    // en la segunda pasada y termina cayendo al mensaje genérico, perdiendo
+    // el mensaje específico. Las 2 excepciones (sin sesión y timeout,
+    // arriba/abajo) ya están en español desde aquí porque son casos que
+    // ningún archivo necesita re-traducir (no vienen de Supabase/Postgres).
     const timedOut = networkErr.name === "AbortError";
     return {
       data: null,
       error: {
         message: timedOut
           ? "La operación tardó demasiado y se canceló. Intenta de nuevo."
-          : traducirError(networkErr).mensaje,
+          : networkErr.message || "Error de red",
       },
     };
   } finally {
@@ -87,10 +95,9 @@ async function call(action, payload) {
   const body = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    return {
-      data: null,
-      error: { message: traducirError({ message: body.error || `Error ${res.status}` }).mensaje },
-    };
+    // Igual que en el catch de red: no traducir aquí, se deja tal cual
+    // para que la página que llama lo traduzca una sola vez (ver nota arriba).
+    return { data: null, error: { message: body.error || `Error ${res.status}` } };
   }
 
   return { data: body, error: null };

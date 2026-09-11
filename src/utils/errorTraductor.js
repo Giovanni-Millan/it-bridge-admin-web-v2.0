@@ -95,6 +95,20 @@ const REGLAS = [
     titulo: "La operación tardó demasiado",
     mensaje: "La operación tardó demasiado y se canceló. Intenta de nuevo.",
   },
+  // Estos 2 mensajes ya salen en español desde adminApi.js (no vienen de
+  // Supabase/Postgres) — se reconocen tal cual para que una página que
+  // vuelva a pasarlos por traducirError (via mostrarError) no los degrade
+  // al mensaje genérico de "Ocurrió un error".
+  {
+    test: (code, raw) => raw === "No hay sesión activa",
+    titulo: "Sesión no encontrada",
+    mensaje: "No hay una sesión activa. Vuelve a iniciar sesión e intenta de nuevo.",
+  },
+  {
+    test: (code, raw) => /tardó demasiado y se canceló/i.test(raw),
+    titulo: "La operación tardó demasiado",
+    mensaje: "La operación tardó demasiado y se canceló. Intenta de nuevo.",
+  },
 ];
 
 /**

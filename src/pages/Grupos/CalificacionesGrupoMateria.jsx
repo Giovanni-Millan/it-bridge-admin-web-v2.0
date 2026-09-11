@@ -206,6 +206,71 @@ export default function CalificacionesGrupoMateria() {
     else fetchCalificacionesUniversidad();
   };
 
+  const desbloquearTodas = async () => {
+    const { bloqueadas } = resumenCandados();
+
+    if (bloqueadas === 0) {
+      Swal.fire("Nada que desbloquear", "No hay calificaciones bloqueadas en esta materia.", "info");
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "¿Estás seguro de desbloquear las calificaciones?",
+      text: `Se desbloquearán las ${bloqueadas} calificación${bloqueadas === 1 ? "" : "es"} bloqueada${
+        bloqueadas === 1 ? "" : "s"
+      } de "${materiaDecoded}". El profesor podrá volver a capturarlas mientras la captura de calificaciones siga habilitada.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d97706",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Sí, desbloquear todas",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!result.isConfirmed) return;
+
+    let error;
+    if (esBachillerato) {
+      ({ error } = await updateRowsWhere(
+        "calificaciones_parciales",
+        [
+          { column: "id_grupo", value: id_grupo },
+          { column: "materia", value: materiaDecoded },
+          { column: "bloqueada", value: true },
+        ],
+        { bloqueada: false }
+      ));
+    } else {
+      const correos = filas.map((f) => f.alumno?.correo).filter(Boolean);
+      if (correos.length === 0) return;
+      ({ error } = await updateRowsWhere(
+        "calificaciones",
+        [
+          { column: "materia", value: materiaDecoded },
+          { column: "id_grupo", value: id_grupo },
+          { column: "bloqueada", value: true },
+        ],
+        { bloqueada: false },
+        { column: "correo", values: correos }
+      ));
+    }
+
+    if (error) {
+      Swal.fire("Error", "No se pudieron desbloquear todas las calificaciones.", "error");
+      return;
+    }
+
+    Swal.fire({
+      icon: "success",
+      title: "Calificaciones desbloqueadas",
+      timer: 1500,
+      showConfirmButton: false,
+    });
+
+    if (esBachillerato) fetchCalificacionesParciales();
+    else fetchCalificacionesUniversidad();
+  };
+
   const calcularPromedio = (fila) => {
     const valores = [1, 2, 3]
       .map((p) => fila.parciales[p]?.calificacion)
@@ -418,6 +483,15 @@ export default function CalificacionesGrupoMateria() {
             <p className="text-purple-700 font-medium mt-1">{grupo?.nombre}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {bloqueadas > 0 && (
+              <button
+                onClick={desbloquearTodas}
+                className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all"
+              >
+                <FontAwesomeIcon icon={faLockOpen} />
+                Desbloquear todas ({bloqueadas})
+              </button>
+            )}
             {editables > 0 && (
               <button
                 onClick={bloquearTodas}
