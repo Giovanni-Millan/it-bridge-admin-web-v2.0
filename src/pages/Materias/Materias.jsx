@@ -7,8 +7,8 @@ import { faArrowLeft, faPlus, faTrash, faSearch, faBook } from "@fortawesome/fre
 import { Link } from "react-router-dom";
 import Swal from "sweetalert2";
 
-// CRUD del catálogo de materias, agrupado por área (Bachillerato + cada
-// carrera de universidad). Es solo un catálogo DE REFERENCIA para el
+// CRUD del catálogo de materias, agrupado por área (Bachillerato +
+// Secundaria + cada carrera de universidad). Es solo un catálogo DE REFERENCIA para el
 // autocompletado al asignar profesor a un grupo (ver DetalleGrupo.jsx) —
 // `grupo_profesores.materia` es texto libre, sin FK real hacia esta tabla,
 // así que borrar una materia de aquí no afecta asignaciones que ya la usen.
@@ -44,9 +44,9 @@ export default function Materias() {
     if (!error) setMaterias(data || []);
   };
 
-  // Las áreas son "Bachillerato" y cada carrera de universidad (sin la
-  // modalidad), derivadas de la tabla carrera para que siempre coincidan
-  // con las carreras reales del sistema.
+  // Las áreas son "Bachillerato", "Secundaria" y cada carrera de universidad
+  // (sin la modalidad), derivadas de la tabla carrera para que siempre
+  // coincidan con las carreras reales del sistema.
   const fetchAreas = async () => {
     const { data, error } = await supabase.from("carrera").select("nombre");
     if (error) return;
@@ -86,7 +86,7 @@ export default function Materias() {
       return;
     }
     if (!areaSeleccionada) {
-      Swal.fire("Falta el área", "Selecciona si es de Bachillerato o de qué carrera de universidad.", "warning");
+      Swal.fire("Falta el área", "Selecciona si es de Secundaria, Bachillerato o de qué carrera de universidad.", "warning");
       return;
     }
 
@@ -157,7 +157,8 @@ export default function Materias() {
             >
               <option value="">Selecciona un área...</option>
               <option value="Bachillerato">Bachillerato</option>
-              {areas.filter((a) => a !== "Bachillerato").map((area) => (
+              <option value="Secundaria">Secundaria</option>
+              {areas.filter((a) => a !== "Bachillerato" && a !== "Secundaria").map((area) => (
                 <option key={area} value={area}>
                   {area} (Universidad)
                 </option>
@@ -200,7 +201,8 @@ export default function Materias() {
           >
             <option value="">Todas las áreas</option>
             <option value="Bachillerato">Bachillerato</option>
-            {areas.filter((a) => a !== "Bachillerato").map((area) => (
+            <option value="Secundaria">Secundaria</option>
+            {areas.filter((a) => a !== "Bachillerato" && a !== "Secundaria").map((area) => (
               <option key={area} value={area}>
                 {area} (Universidad)
               </option>
@@ -224,7 +226,7 @@ export default function Materias() {
                 <div key={area} className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
                   <div className="bg-purple-700 px-6 py-3 flex items-center justify-between">
                     <h3 className="text-white font-semibold">
-                      {area} {area !== "Bachillerato" && <span className="font-normal text-purple-200 text-sm">(Universidad)</span>}
+                      {area} {area !== "Bachillerato" && area !== "Secundaria" && <span className="font-normal text-purple-200 text-sm">(Universidad)</span>}
                     </h3>
                     <span className="text-purple-200 text-sm">{materiasPorArea[area].length} materia{materiasPorArea[area].length === 1 ? "" : "s"}</span>
                   </div>

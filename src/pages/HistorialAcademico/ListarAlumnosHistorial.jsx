@@ -123,6 +123,8 @@ export default function ListarAlumnosHistorial() {
                           className={`px-3 py-1 rounded-full text-xs font-semibold ${
                             a.tipo === "bachillerato"
                               ? "bg-red-100 text-red-700"
+                              : a.tipo === "secundaria"
+                              ? "bg-indigo-100 text-indigo-700"
                               : a.tipo === "autoplaneado"
                               ? "bg-green-100 text-green-700"
                               : "bg-blue-100 text-blue-700"

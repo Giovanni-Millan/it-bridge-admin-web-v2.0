@@ -25,6 +25,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const TIPOS = [
   { valor: "universidad", etiqueta: "Universidad" },
   { valor: "bachillerato", etiqueta: "Bachillerato" },
+  { valor: "secundaria", etiqueta: "Secundaria" },
   { valor: "autoplaneado", etiqueta: "Autoplaneado" },
 ];
 

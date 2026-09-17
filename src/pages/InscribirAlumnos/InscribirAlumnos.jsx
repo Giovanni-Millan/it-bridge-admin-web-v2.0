@@ -247,9 +247,10 @@ export default function InscribirAlumnos() {
               >
 
                 <option value="">
-                  ¿Bachillerato, Universidad o Autoplaneado?
+                  ¿Secundaria, Bachillerato, Universidad o Autoplaneado?
                 </option>
 
+                <option value="secundaria">Secundaria</option>
                 <option value="bachillerato">Bachillerato</option>
                 <option value="universidad">Universidad</option>
                 <option value="autoplaneado">Autoplaneado</option>

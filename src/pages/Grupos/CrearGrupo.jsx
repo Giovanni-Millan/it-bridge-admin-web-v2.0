@@ -12,11 +12,12 @@ import { mostrarError } from "../../utils/errorTraductor";
 // /Grupos/Editar/:id_grupo apuntan aquí, `modoEdicion` (si vino id_grupo
 // por la URL) decide si precarga datos existentes y hace UPDATE en vez de
 // INSERT. El formulario cambia de campos según el "Nivel educativo"
-// elegido (universidad=cuatrimestre, bachillerato=semestre,
+// elegido (universidad=cuatrimestre, bachillerato/secundaria=semestre
+// (label "Grado" en secundaria, mismo campo `semestre` de la BD),
 // autoplaneado=solo periodo/año) — ver `handleTipoChange` y
 // `carrerasFiltradas` para cómo se filtra el catálogo de carreras según
-// el tipo (las de Bachillerato/Autoplaneado están marcadas con ese prefijo
-// en el nombre, no hay una columna separada para distinguirlas).
+// el tipo (las de Bachillerato/Secundaria/Autoplaneado están marcadas con
+// ese prefijo en el nombre, no hay una columna separada para distinguirlas).
 export default function CrearGrupo() {
   const navigate = useNavigate();
   const { id_grupo } = useParams();
@@ -83,13 +84,14 @@ export default function CrearGrupo() {
     setLoadingCarreras(false);
   };
 
-  // Las carreras de Bachillerato empiezan con "Bachillerato", las de Autoplaneado con "Autoplaneado"
+  // Las carreras de Bachillerato/Secundaria/Autoplaneado empiezan con ese prefijo
   const carrerasFiltradas = useMemo(() => {
     return carreras.filter((c) => {
       const nombre = c.nombre?.toLowerCase() || "";
       if (formData.tipo === "bachillerato") return nombre.startsWith("bachillerato");
+      if (formData.tipo === "secundaria") return nombre.startsWith("secundaria");
       if (formData.tipo === "autoplaneado") return nombre.startsWith("autoplaneado");
-      return !nombre.startsWith("bachillerato") && !nombre.startsWith("autoplaneado");
+      return !nombre.startsWith("bachillerato") && !nombre.startsWith("secundaria") && !nombre.startsWith("autoplaneado");
     });
   }, [carreras, formData.tipo]);
 
@@ -121,7 +123,7 @@ export default function CrearGrupo() {
             ? parseInt(formData.cuatrimestre)
             : null,
         semestre:
-          formData.tipo === "bachillerato" && formData.semestre
+          (formData.tipo === "bachillerato" || formData.tipo === "secundaria") && formData.semestre
             ? parseInt(formData.semestre)
             : null,
         periodo:
@@ -198,7 +200,7 @@ export default function CrearGrupo() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Nivel educativo
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => handleTipoChange("universidad")}
@@ -220,6 +222,17 @@ export default function CrearGrupo() {
                   }`}
                 >
                   Bachillerato
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTipoChange("secundaria")}
+                  className={`py-2.5 rounded-lg font-medium border-2 transition-all ${
+                    formData.tipo === "secundaria"
+                      ? "bg-indigo-700 text-white border-indigo-700"
+                      : "bg-white text-indigo-700 border-indigo-200 hover:border-indigo-400"
+                  }`}
+                >
+                  Secundaria
                 </button>
                 <button
                   type="button"
@@ -245,6 +258,8 @@ export default function CrearGrupo() {
                 placeholder={
                   formData.tipo === "bachillerato"
                     ? "Ej. Bachillerato 3er Semestre - Grupo A"
+                    : formData.tipo === "secundaria"
+                    ? "Ej. Secundaria 1er Grado Escolarizado 2026"
                     : "Ej. Sistemas Escolarizado - Grupo A"
                 }
                 value={formData.nombre}
@@ -256,7 +271,11 @@ export default function CrearGrupo() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {formData.tipo === "bachillerato" ? "Carrera / Modalidad de Bachillerato" : "Carrera y modalidad"}
+                {formData.tipo === "bachillerato"
+                  ? "Carrera / Modalidad de Bachillerato"
+                  : formData.tipo === "secundaria"
+                  ? "Modalidad de Secundaria"
+                  : "Carrera y modalidad"}
               </label>
               <select
                 name="id_carrera"
@@ -275,12 +294,17 @@ export default function CrearGrupo() {
                   </option>
                 ))}
               </select>
-              {(formData.tipo === "bachillerato" || formData.tipo === "autoplaneado") &&
+              {(formData.tipo === "bachillerato" || formData.tipo === "secundaria" || formData.tipo === "autoplaneado") &&
                 carrerasFiltradas.length === 0 &&
                 !loadingCarreras && (
                   <p className="text-xs text-red-500 mt-1">
-                    No hay carreras de {formData.tipo === "bachillerato" ? "Bachillerato" : "Autoplaneado"} en el
-                    catálogo. Ejecuta el script SQL más reciente en Supabase.
+                    No hay carreras de{" "}
+                    {formData.tipo === "bachillerato"
+                      ? "Bachillerato"
+                      : formData.tipo === "secundaria"
+                      ? "Secundaria"
+                      : "Autoplaneado"}{" "}
+                    en el catálogo. Ejecuta el script SQL más reciente en Supabase.
                   </p>
                 )}
             </div>
@@ -390,6 +414,43 @@ export default function CrearGrupo() {
                   >
                     <option value="">Selecciona...</option>
                     {[1, 2, 3, 4, 5, 6].map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Año
+                  </label>
+                  <select
+                    name="anio"
+                    value={formData.anio}
+                    onChange={handleChange}
+                    className="input bg-white"
+                  >
+                    <option value="">Selecciona...</option>
+                    {AÑOS.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {formData.tipo === "secundaria" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Grado
+                  </label>
+                  <select
+                    name="semestre"
+                    value={formData.semestre}
+                    onChange={handleChange}
+                    className="input bg-white"
+                  >
+                    <option value="">Selecciona...</option>
+                    {[1, 2, 3].map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>

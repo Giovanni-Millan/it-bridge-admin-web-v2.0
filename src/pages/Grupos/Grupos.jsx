@@ -51,7 +51,7 @@ export default function Grupos() {
 
   // Borrar un grupo se lleva de encuentro (ON DELETE CASCADE en la BD) sus
   // inscripciones de alumnos/profesores, asistencias y calificaciones
-  // parciales (bachillerato) — el texto de confirmación lo advierte porque
+  // parciales (bachillerato/secundaria) — el texto de confirmación lo advierte porque
   // no hay forma de deshacerlo desde la UI.
   // OJO: `calificaciones` (universidad/autoplaneado) NO tiene cascade, es
   // ON DELETE NO ACTION — si el grupo ya tiene alguna calificación

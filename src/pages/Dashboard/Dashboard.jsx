@@ -332,8 +332,8 @@ export default function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-800">Captura de calificaciones</h3>
             <p className="text-sm text-gray-500 mt-1">
               Habilita este interruptor cuando llegue el periodo en el que los profesores deban
-              registrar calificaciones (bachillerato y universidad). Al desactivarlo, los profesores
-              ya no podrán capturar ni corregir calificaciones desde el Portal del Docente.
+              registrar calificaciones (secundaria, bachillerato y universidad). Al desactivarlo, los
+              profesores ya no podrán capturar ni corregir calificaciones desde el Portal del Docente.
             </p>
           </div>
 

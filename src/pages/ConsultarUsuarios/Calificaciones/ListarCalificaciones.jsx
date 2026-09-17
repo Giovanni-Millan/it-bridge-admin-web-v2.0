@@ -456,7 +456,7 @@ export default function CalificacionesAlumno() {
             <h2 className="text-lg font-semibold text-white">Historial académico (permanente)</h2>
           </div>
           <p className="px-6 pt-4 text-sm text-gray-500">
-            Se conserva aunque el grupo o la materia se eliminen más adelante. Incluye Bachillerato y Universidad.
+            Se conserva aunque el grupo o la materia se eliminen más adelante. Incluye Secundaria, Bachillerato y Universidad.
           </p>
 
           <div className="overflow-x-auto">
@@ -486,13 +486,27 @@ export default function CalificacionesAlumno() {
                       <tr key={h.id} className="border-b hover:bg-indigo-50 transition">
                         <td className="py-3 px-6 font-medium">{h.materia}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${h.tipo === "Bachillerato" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              h.tipo === "Bachillerato"
+                                ? "bg-red-100 text-red-700"
+                                : h.tipo === "Secundaria"
+                                ? "bg-indigo-100 text-indigo-700"
+                                : "bg-blue-100 text-blue-700"
+                            }`}
+                          >
                             {h.tipo}
                           </span>
                         </td>
                         <td className="py-3 px-4">{h.grupo_nombre ?? "-"}</td>
                         <td className="py-3 px-4">{h.docente_nombre ?? "-"}</td>
-                        <td className="py-3 px-4 text-center">{h.tipo === "Bachillerato" ? (h.semestre ? `Semestre ${h.semestre}` : "-") : (h.periodo ?? "-")}</td>
+                        <td className="py-3 px-4 text-center">
+                          {h.tipo === "Bachillerato" || h.tipo === "Secundaria"
+                            ? h.semestre
+                              ? `${h.tipo === "Secundaria" ? "Grado" : "Semestre"} ${h.semestre}`
+                              : "-"
+                            : h.periodo ?? "-"}
+                        </td>
                         <td className="py-3 px-4 text-center">{h.anio ?? "-"}</td>
                         <td className="py-3 px-4 text-center font-bold">{!isNaN(cal) ? cal.toFixed(1) : "-"}</td>
                       </tr>

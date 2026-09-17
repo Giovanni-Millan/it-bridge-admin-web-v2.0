@@ -436,6 +436,8 @@ export default function DetalleGrupo() {
                   className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                     grupo.tipo === "bachillerato"
                       ? "bg-amber-100 text-amber-800"
+                      : grupo.tipo === "secundaria"
+                      ? "bg-indigo-100 text-indigo-800"
                       : grupo.tipo === "autoplaneado"
                       ? "bg-green-100 text-green-800"
                       : "bg-purple-100 text-purple-800"
@@ -443,6 +445,8 @@ export default function DetalleGrupo() {
                 >
                   {grupo.tipo === "bachillerato"
                     ? "Bachillerato"
+                    : grupo.tipo === "secundaria"
+                    ? "Secundaria"
                     : grupo.tipo === "autoplaneado"
                     ? "Autoplaneado"
                     : "Universidad"}
@@ -451,6 +455,8 @@ export default function DetalleGrupo() {
               <p className="text-purple-700 font-medium mt-1">{grupo.carrera_nombre || "Sin carrera asignada"}</p>
               {grupo.tipo === "bachillerato" &&
                 grupo.semestre && <p className="text-sm text-gray-500 mt-1">Semestre {grupo.semestre}</p>}
+              {grupo.tipo === "secundaria" &&
+                grupo.semestre && <p className="text-sm text-gray-500 mt-1">Grado {grupo.semestre}</p>}
               {grupo.tipo === "universidad" &&
                 grupo.cuatrimestre && <p className="text-sm text-gray-500 mt-1">Cuatrimestre {grupo.cuatrimestre}</p>}
               {(grupo.periodo || grupo.anio) && (
@@ -742,7 +748,13 @@ export default function DetalleGrupo() {
                                 ? ` · Plan ${alumno.plan_meses} meses`
                                 : ""
                               : alumno.cuatrimestre
-                              ? ` · ${grupo.tipo === "bachillerato" ? "Semestre" : "Cuatrimestre"} ${alumno.cuatrimestre}`
+                              ? ` · ${
+                                  grupo.tipo === "bachillerato"
+                                    ? "Semestre"
+                                    : grupo.tipo === "secundaria"
+                                    ? "Grado"
+                                    : "Cuatrimestre"
+                                } ${alumno.cuatrimestre}`
                               : ""}
                           </span>
                         </span>

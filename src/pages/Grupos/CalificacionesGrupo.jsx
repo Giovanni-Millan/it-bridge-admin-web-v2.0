@@ -9,7 +9,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 // materia lleva a CalificacionesGrupoMateria.jsx para ver/editar el detalle
 // alumno por alumno. Es el mismo cálculo que después se generalizó a TODOS
 // los grupos en PendientesCalificaciones.jsx (1-sep-2026), pero aquí acotado
-// a un solo grupo. Distingue bachillerato (tabla `calificaciones_parciales`)
+// a un solo grupo. Distingue bachillerato/secundaria (tabla `calificaciones_parciales`)
 // de universidad/autoplaneado (tabla `calificaciones`) — ver el `if` de abajo.
 export default function CalificacionesGrupo() {
   const { id_grupo } = useParams();
@@ -39,8 +39,8 @@ export default function CalificacionesGrupo() {
     setGrupo(grupoData || null);
     const totalAlumnos = (alumnosGrupo || []).length;
 
-    if (grupoData?.tipo === "bachillerato") {
-      // Bachillerato: calificaciones_parciales sí tiene id_grupo directo.
+    if (grupoData?.tipo === "bachillerato" || grupoData?.tipo === "secundaria") {
+      // Bachillerato/Secundaria: calificaciones_parciales sí tiene id_grupo directo.
       const { data: parciales } = await supabase
         .from("calificaciones_parciales")
         .select("materia, id_alumno, bloqueada")
@@ -121,7 +121,13 @@ export default function CalificacionesGrupo() {
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">{grupo.nombre}</h1>
             <p className="text-purple-700 font-medium mt-1">
               Calificaciones por materia (
-              {grupo.tipo === "bachillerato" ? "Bachillerato" : grupo.tipo === "autoplaneado" ? "Autoplaneado" : "Universidad"}
+              {grupo.tipo === "bachillerato"
+                ? "Bachillerato"
+                : grupo.tipo === "secundaria"
+                ? "Secundaria"
+                : grupo.tipo === "autoplaneado"
+                ? "Autoplaneado"
+                : "Universidad"}
               )
             </p>
           </div>

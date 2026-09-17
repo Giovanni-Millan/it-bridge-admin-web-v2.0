@@ -14,8 +14,8 @@ import * as XLSX from "xlsx";
 // El admin aquí NO captura calificaciones (no hay ningún input de nota) —
 // solo puede VER lo que el docente ya capturó, bloquear/desbloquear
 // (individual o "bloquear todas" de un golpe) y exportar a PDF/Excel. La
-// forma de esquema es distinta según el tipo de grupo: bachillerato trae 3
-// parciales por alumno (`calificaciones_parciales`) con su promedio
+// forma de esquema es distinta según el tipo de grupo: bachillerato/secundaria
+// traen 3 parciales por alumno (`calificaciones_parciales`) con su promedio
 // calculado en el cliente; universidad/autoplaneado trae una sola nota
 // (`calificaciones`).
 export default function CalificacionesGrupoMateria() {
@@ -24,12 +24,15 @@ export default function CalificacionesGrupoMateria() {
   const navigate = useNavigate();
 
   const [grupo, setGrupo] = useState(null);
-  // Bachillerato: una fila por alumno con { clave, alumno, parciales: {1,2,3} }
+  // Bachillerato/Secundaria: una fila por alumno con { clave, alumno, parciales: {1,2,3} }
   // Universidad/Autoplaneado: una fila por alumno con { clave, alumno, calificacion }
   const [filas, setFilas] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const esBachillerato = grupo?.tipo === "bachillerato";
+  // El nombre quedó de cuando solo existía Bachillerato con 3 parciales;
+  // Secundaria usa exactamente el mismo esquema (`calificaciones_parciales`),
+  // así que se agrupa aquí en vez de duplicar todo el `if` de abajo.
+  const esBachillerato = grupo?.tipo === "bachillerato" || grupo?.tipo === "secundaria";
 
   useEffect(() => {
     cargarTodo();
@@ -41,7 +44,7 @@ export default function CalificacionesGrupoMateria() {
     const { data: grupoData } = await supabase.from("vista_grupos_resumen").select("*").eq("id_grupo", id_grupo).single();
     setGrupo(grupoData || null);
 
-    if (grupoData?.tipo === "bachillerato") {
+    if (grupoData?.tipo === "bachillerato" || grupoData?.tipo === "secundaria") {
       await fetchCalificacionesParciales();
     } else {
       await fetchCalificacionesUniversidad();
@@ -543,7 +546,7 @@ export default function CalificacionesGrupoMateria() {
 
         {esBachillerato ? (
           <>
-            {/* Tabla escritorio — Bachillerato (3 parciales + promedio) */}
+            {/* Tabla escritorio — Bachillerato/Secundaria (3 parciales + promedio) */}
             <div className="hidden md:block w-full overflow-x-auto rounded-2xl shadow-md bg-white">
               <table className="w-full table-auto divide-y divide-gray-200">
                 <thead className="bg-purple-700">
@@ -590,7 +593,7 @@ export default function CalificacionesGrupoMateria() {
               </table>
             </div>
 
-            {/* Tarjetas móvil — Bachillerato */}
+            {/* Tarjetas móvil — Bachillerato/Secundaria */}
             <div className="md:hidden space-y-4">
               {filas.length === 0 ? (
                 <div className="text-center text-gray-500 py-10 bg-white rounded-xl shadow">
