@@ -15,6 +15,7 @@ import Swal from "sweetalert2";
 import { supabase } from "../../components/supabaseClient.js";
 import { createUser } from "../../components/adminApi";
 import { mostrarError } from "../../utils/errorTraductor";
+import { getAdminSesion } from "../../components/adminSesion.js";
 
 // Quita acentos y cualquier caracter que no sea letra, todo en minúsculas
 const normalizarTexto = (texto) =>
@@ -39,6 +40,8 @@ const generarPassword = (rolLabel, nombre) =>
 export default function InscribirAlumnos() {
 
   const navigate = useNavigate();
+  const adminSesion = getAdminSesion();
+  const [sedes, setSedes] = useState([]);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -51,8 +54,15 @@ export default function InscribirAlumnos() {
     telefono: "",
     direccion: "",
     tipo: "",
-    plan_meses: ""
+    plan_meses: "",
+    id_sede: adminSesion?.idSede ?? ""
   });
+
+  React.useEffect(() => {
+    if (adminSesion?.esSuperAdmin) {
+      supabase.from("sedes").select("*").order("nombre").then(({ data }) => setSedes(data || []));
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -128,6 +138,10 @@ export default function InscribirAlumnos() {
 
               plan_meses: formData.tipo === "autoplaneado" && formData.plan_meses ? parseInt(formData.plan_meses) : null,
 
+              // Un admin normal solo puede inscribir en su propia sede (RLS lo
+              // rechaza si manda otra); un super admin sí puede elegir.
+              id_sede: adminSesion?.esSuperAdmin ? parseInt(formData.id_sede) : adminSesion?.idSede,
+
               codigo: Math.floor(
                 100000 + Math.random() * 900000
               )
@@ -195,6 +209,28 @@ export default function InscribirAlumnos() {
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sede</label>
+              {adminSesion?.esSuperAdmin ? (
+                <select
+                  name="id_sede"
+                  value={formData.id_sede}
+                  onChange={handleChange}
+                  required
+                  className="input bg-white"
+                >
+                  <option value="">Selecciona una sede...</option>
+                  {sedes.map((s) => (
+                    <option key={s.id_sede} value={s.id_sede}>{s.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="input bg-gray-100 text-gray-600 flex items-center">
+                  {adminSesion?.sedeNombre || "Tu sede"}
+                </p>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 

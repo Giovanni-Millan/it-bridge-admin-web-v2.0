@@ -29,11 +29,13 @@ import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2'
 import { supabase } from '../../components/supabaseClient.js';
 import { updateRows } from '../../components/adminApi';
+import { cargarAdminSesion, getAdminSesion, limpiarAdminSesion } from '../../components/adminSesion.js';
 
 export default function Dashboard() {
 
   const [avisos, setAvisos] = useState([]);
   const [correo, setCorreo] = useState("");
+  const [adminSesion, setAdminSesion] = useState(() => getAdminSesion());
   const [mostrarAvisos, setMostrarAvisos] = useState(false);
   const [capturaHabilitada, setCapturaHabilitada] = useState(false);
   const [actualizandoCaptura, setActualizandoCaptura] = useState(false);
@@ -54,6 +56,12 @@ export default function Dashboard() {
 
     getUser();
 
+    // Sesión ya cacheada en Login.jsx; si falta (sesión abierta antes de
+    // esta feature, u otra pestaña), se recarga aquí como respaldo.
+    if (!getAdminSesion()) {
+      cargarAdminSesion().then((sesion) => sesion && setAdminSesion(sesion));
+    }
+
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setCorreo(session?.user?.email || "");
@@ -73,7 +81,7 @@ export default function Dashboard() {
   const fetchAvisos = async () => {
     const { data, error } = await supabase
       .from('avisos')
-      .select('*')
+      .select('*, sedes(nombre)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -166,6 +174,7 @@ export default function Dashboard() {
 
   async function handleLogOut() {
     await supabase.auth.signOut();
+    limpiarAdminSesion();
     window.location.href = '/';
   }
 
@@ -241,8 +250,13 @@ export default function Dashboard() {
       {/* HEADER */}
       <div className="flex items-center justify-between px-8 py-6 bg-white shadow-md">
 
-        <h1 className="text-lg md:text-2xl font-semibold text-gray-800">
+        <h1 className="text-lg md:text-2xl font-semibold text-gray-800 flex items-center gap-3 flex-wrap">
           Bienvenido {correo ? correo : "cargando..."}
+          {adminSesion && (
+            <span className="text-xs font-semibold bg-purple-50 text-purple-700 px-3 py-1 rounded-full">
+              {adminSesion.esSuperAdmin ? "Todas las sedes" : adminSesion.sedeNombre}
+            </span>
+          )}
         </h1>
 
         <button
@@ -382,7 +396,12 @@ export default function Dashboard() {
                   onClick={() => handleViewAviso(aviso)}
                   className="border rounded-lg p-4 bg-purple-50 text-left"
                 >
-                  <h3 className="font-semibold">{aviso.titulo}</h3>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h3 className="font-semibold">{aviso.titulo}</h3>
+                    <span className="shrink-0 text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                      {aviso.sedes?.nombre || "Todas las sedes"}
+                    </span>
+                  </div>
                   <p className="text-sm text-gray-600 line-clamp-3">
                     {aviso.descripcion}
                   </p>

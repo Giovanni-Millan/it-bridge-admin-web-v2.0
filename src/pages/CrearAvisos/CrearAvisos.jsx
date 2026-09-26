@@ -5,19 +5,34 @@
 // los ven docente/alumno/psicólogo (`avisos` es un canal compartido de
 // comunicación entre los 4 portales); verlos/borrarlos desde el admin es
 // en Dashboard.jsx, no en esta pantalla.
-import React, { useState } from 'react'
+//
+// Multi-sede (26-sep-2026): un admin normal SOLO puede crear avisos de su
+// propia sede (RLS lo rechaza si manda otra cosa) — aquí se manda fijo,
+// sin poder elegir. Un super admin sí puede elegir sede específica o dejar
+// "Todas las sedes" (id_sede = NULL), para anuncios generales del sistema.
+import React, { useEffect, useState } from 'react'
 import Navbar from '../../components/Navbar'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import { Link, useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import { supabase } from '../../components/supabaseClient.js'; // 👈 IMPORTANTE
+import { getAdminSesion } from '../../components/adminSesion.js';
 
 export default function CrearAvisos() {
   const navigate = useNavigate();
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sedes, setSedes] = useState([]);
+  const adminSesion = getAdminSesion();
+  const [idSede, setIdSede] = useState(adminSesion?.idSede ?? "");
+
+  useEffect(() => {
+    if (adminSesion?.esSuperAdmin) {
+      supabase.from('sedes').select('*').order('nombre').then(({ data }) => setSedes(data || []));
+    }
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -28,7 +43,8 @@ export default function CrearAvisos() {
       .insert([
         {
           titulo: titulo,
-          descripcion: descripcion
+          descripcion: descripcion,
+          id_sede: adminSesion?.esSuperAdmin ? (idSede || null) : adminSesion?.idSede,
         }
       ]);
 
@@ -74,6 +90,27 @@ export default function CrearAvisos() {
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Campo sede */}
+            <div>
+              <label className="block text-gray-700 font-medium mb-2">Sede:</label>
+              {adminSesion?.esSuperAdmin ? (
+                <select
+                  value={idSede}
+                  onChange={e => setIdSede(e.target.value)}
+                  className="w-full border border-gray-300 focus:border-purple-600 focus:ring-2 focus:ring-purple-300 rounded-md px-3 py-2 text-gray-700 outline-none transition-all bg-white"
+                >
+                  <option value="">Todas las sedes</option>
+                  {sedes.map(s => (
+                    <option key={s.id_sede} value={s.id_sede}>{s.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="w-full border border-gray-200 bg-gray-100 rounded-md px-3 py-2 text-gray-600">
+                  {adminSesion?.sedeNombre || "Tu sede"}
+                </p>
+              )}
+            </div>
+
             {/* Campo título */}
             <div>
               <label className="block text-gray-700 font-medium mb-2">Título:</label>

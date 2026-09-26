@@ -15,6 +15,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
+import { getAdminSesion } from "../../components/adminSesion.js";
 
 // Listado de todos los grupos (CRUD "nuevo", el que sí está activo — no
 // confundir con las ~40 páginas legacy de "Consultar Grupos" por
@@ -26,6 +27,8 @@ export default function Grupos() {
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sedeFiltro, setSedeFiltro] = useState("todas");
+  const adminSesion = getAdminSesion();
 
   useEffect(() => {
     fetchGrupos();
@@ -88,12 +91,19 @@ export default function Grupos() {
     fetchGrupos();
   };
 
+  // Sedes reales presentes en los grupos ya cargados (RLS ya trae solo lo
+  // permitido: todas si es super admin, solo la propia si no).
+  const sedesDisponibles = [...new Map(
+    grupos.filter((g) => g.sede_nombre).map((g) => [g.id_sede, g.sede_nombre])
+  ).entries()];
+
   const filteredGrupos = grupos.filter((g) => {
     const term = searchTerm.toLowerCase();
-    return (
+    const coincideTexto =
       g.nombre?.toLowerCase().includes(term) ||
-      g.carrera_nombre?.toLowerCase().includes(term)
-    );
+      g.carrera_nombre?.toLowerCase().includes(term);
+    const coincideSede = sedeFiltro === "todas" || g.id_sede === Number(sedeFiltro);
+    return coincideTexto && coincideSede;
   });
 
   return (
@@ -124,18 +134,33 @@ export default function Grupos() {
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Grupos</h1>
         </div>
 
-        <div className="relative w-full md:w-96 mb-6">
-          <FontAwesomeIcon
-            icon={faSearch}
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            placeholder="Buscar por nombre de grupo o carrera..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white shadow-sm"
-          />
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <div className="relative w-full md:w-96">
+            <FontAwesomeIcon
+              icon={faSearch}
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Buscar por nombre de grupo o carrera..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white shadow-sm"
+            />
+          </div>
+
+          {adminSesion?.esSuperAdmin && sedesDisponibles.length > 1 && (
+            <select
+              value={sedeFiltro}
+              onChange={(e) => setSedeFiltro(e.target.value)}
+              className="w-full sm:w-56 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white shadow-sm"
+            >
+              <option value="todas">Todas las sedes</option>
+              {sedesDisponibles.map(([id, nombre]) => (
+                <option key={id} value={id}>{nombre}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {loading ? (
@@ -156,7 +181,14 @@ export default function Grupos() {
                 className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-200"
               >
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-1">{grupo.nombre}</h3>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h3 className="text-lg font-bold text-gray-800">{grupo.nombre}</h3>
+                    {grupo.sede_nombre && (
+                      <span className="shrink-0 text-xs font-semibold bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full">
+                        {grupo.sede_nombre}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-purple-700 font-medium mb-1">
                     {grupo.carrera_nombre || "Sin carrera asignada"}
                   </p>

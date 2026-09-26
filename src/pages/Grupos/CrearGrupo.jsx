@@ -7,6 +7,7 @@ import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import { mostrarError } from "../../utils/errorTraductor";
+import { getAdminSesion } from "../../components/adminSesion.js";
 
 // Alta y edición de grupo en un solo componente: rutas /Grupos/Crear y
 // /Grupos/Editar/:id_grupo apuntan aquí, `modoEdicion` (si vino id_grupo
@@ -27,6 +28,8 @@ export default function CrearGrupo() {
   const [loadingCarreras, setLoadingCarreras] = useState(true);
   const [cargandoGrupo, setCargandoGrupo] = useState(modoEdicion);
   const [guardando, setGuardando] = useState(false);
+  const [sedes, setSedes] = useState([]);
+  const adminSesion = getAdminSesion();
   const [formData, setFormData] = useState({
     nombre: "",
     tipo: "universidad",
@@ -35,6 +38,7 @@ export default function CrearGrupo() {
     semestre: "",
     periodo: "",
     anio: "",
+    id_sede: adminSesion?.idSede ?? "",
   });
 
   const PERIODOS = ["ENE-ABR", "MAY-AGO", "SEP-DIC"];
@@ -43,8 +47,14 @@ export default function CrearGrupo() {
 
   useEffect(() => {
     fetchCarreras();
+    if (adminSesion?.esSuperAdmin) fetchSedes();
     if (modoEdicion) fetchGrupo();
   }, [id_grupo]);
+
+  const fetchSedes = async () => {
+    const { data } = await supabase.from("sedes").select("*").order("nombre");
+    setSedes(data || []);
+  };
 
   const fetchGrupo = async () => {
     setCargandoGrupo(true);
@@ -69,6 +79,7 @@ export default function CrearGrupo() {
       semestre: data.semestre ?? "",
       periodo: data.periodo ?? "",
       anio: data.anio ?? "",
+      id_sede: data.id_sede ?? adminSesion?.idSede ?? "",
     });
     setCargandoGrupo(false);
   };
@@ -131,6 +142,11 @@ export default function CrearGrupo() {
             ? formData.periodo
             : null,
         anio: formData.anio ? parseInt(formData.anio) : null,
+        // Un admin normal no puede elegir sede (admin-api la fuerza a la
+        // suya de todas formas); solo importa lo que mande un super admin.
+        ...(adminSesion?.esSuperAdmin && formData.id_sede
+          ? { id_sede: parseInt(formData.id_sede) }
+          : {}),
       };
 
       let idDestino = id_grupo;
@@ -246,6 +262,28 @@ export default function CrearGrupo() {
                   Autoplaneado
                 </button>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sede</label>
+              {adminSesion?.esSuperAdmin ? (
+                <select
+                  name="id_sede"
+                  value={formData.id_sede}
+                  onChange={handleChange}
+                  required
+                  className="input bg-white"
+                >
+                  <option value="">Selecciona una sede...</option>
+                  {sedes.map((s) => (
+                    <option key={s.id_sede} value={s.id_sede}>{s.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="input bg-gray-100 text-gray-600 flex items-center">
+                  {adminSesion?.sedeNombre || "Tu sede"}
+                </p>
+              )}
             </div>
 
             <div>

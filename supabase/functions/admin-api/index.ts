@@ -104,6 +104,111 @@ Deno.serve(async (req) => {
     return json({ error: "Solo administradores pueden usar esta función" }, 403);
   }
 
+  // Sede del admin que llama (agregado al pasar el sistema a multi-sede).
+  // El cliente aquí es el de service role: NO pasa por RLS, así que esta es
+  // la única capa real que impide que un admin de una sede toque datos de
+  // otra desde dbInsert/dbUpdate/dbDelete. Nunca confiar en lo que mande el
+  // frontend para esto — siempre se lee de la fila real de `admins`.
+  const { data: callerAdminRow, error: callerAdminError } = await admin
+    .from("admins")
+    .select("id_sede, es_super_admin")
+    .eq("id", callerData.user.id)
+    .single();
+  if (callerAdminError || !callerAdminRow) {
+    return json({ error: "No se encontró el perfil de administrador" }, 403);
+  }
+  const callerSede = callerAdminRow.id_sede as number;
+  const esSuperAdmin = callerAdminRow.es_super_admin === true;
+
+  // Tablas donde la sede vive directo en la fila (columna `id_sede`).
+  const TABLAS_SEDE_DIRECTA = new Set(["alumnos", "grupos", "admins"]);
+  // Tablas donde la sede se resuelve vía `id_grupo` -> `grupos.id_sede`.
+  const TABLAS_SEDE_POR_GRUPO = new Set([
+    "grupo_alumnos",
+    "grupo_profesores",
+    "calificaciones",
+    "calificaciones_parciales",
+  ]);
+
+  async function sedeDeGrupo(idGrupo: unknown): Promise<number | null> {
+    if (idGrupo === undefined || idGrupo === null) return null;
+    const { data } = await admin.from("grupos").select("id_sede").eq("id_grupo", idGrupo).maybeSingle();
+    return (data?.id_sede as number | undefined) ?? null;
+  }
+
+  // Sedes "adicionales" de un profesor vía sus grupos asignados (puede dar
+  // clase en más de una). Se combina con su `profesores.id_sede` (sede de
+  // origen/registro) en verificarSedeFila — un profesor es visible/editable
+  // por un admin si CUALQUIERA de las dos coincide con la sede del admin.
+  async function sedesDeProfesor(idProfesor: unknown): Promise<number[]> {
+    if (!idProfesor) return [];
+    const { data } = await admin
+      .from("grupo_profesores")
+      .select("id_grupo")
+      .eq("id_profesor", idProfesor);
+    const idsGrupo = (data ?? []).map((r) => r.id_grupo);
+    if (idsGrupo.length === 0) return [];
+    const { data: grupos } = await admin.from("grupos").select("id_sede").in("id_grupo", idsGrupo);
+    return [...new Set((grupos ?? []).map((g) => g.id_sede as number))];
+  }
+
+  // Verifica que una fila (ya existente, o la que se va a insertar) de
+  // `table` pertenezca a la sede del admin que llama. `null`/`undefined` en
+  // `sedeError` significa "permitido"; si no, es la respuesta 403 a devolver.
+  function sedeError(sedeFila: number | null): Response | null {
+    if (esSuperAdmin) return null;
+    if (sedeFila === null || sedeFila === callerSede) return null;
+    return json({ error: "No tienes permiso sobre esa sede" }, 403);
+  }
+
+  async function verificarSedeFila(table: string, row: Record<string, unknown>): Promise<Response | null> {
+    if (esSuperAdmin) return null;
+    if (TABLAS_SEDE_DIRECTA.has(table)) {
+      const sedeFila = (row.id_sede as number | undefined) ?? null;
+      return sedeError(sedeFila);
+    }
+    if (TABLAS_SEDE_POR_GRUPO.has(table)) {
+      const sedeFila = await sedeDeGrupo(row.id_grupo);
+      return sedeError(sedeFila);
+    }
+    if (table === "profesores") {
+      const sedeOrigen = (row.id_sede as number | undefined) ?? null;
+      if (sedeOrigen === callerSede) return null;
+      const sedes = row.id ? await sedesDeProfesor(row.id) : [];
+      if (sedeOrigen === null && sedes.length === 0) return null; // indeterminado, se deja pasar
+      if (sedes.includes(callerSede)) return null;
+      return json({ error: "No tienes permiso sobre ese docente" }, 403);
+    }
+    return null;
+  }
+
+  // Verifica las filas EXISTENTES que un dbUpdate/dbDelete va a tocar,
+  // consultándolas primero con los mismos filtros que se van a aplicar.
+  async function verificarSedeExistente(
+    table: string,
+    matches: { column: string; value: unknown }[] | null | undefined,
+    columnaValor: { column: string; value: unknown } | null,
+    inFilter: { column: string; values: unknown[] } | null | undefined,
+  ): Promise<Response | null> {
+    if (esSuperAdmin) return null;
+    if (!TABLAS_SEDE_DIRECTA.has(table) && !TABLAS_SEDE_POR_GRUPO.has(table) && table !== "profesores") {
+      return null;
+    }
+    const selectCol = table === "profesores" ? "id, id_sede" : TABLAS_SEDE_DIRECTA.has(table) ? "id_sede" : "id_grupo";
+    let query = admin.from(table).select(selectCol);
+    if (matches) for (const m of matches) query = query.eq(m.column, m.value);
+    if (columnaValor) query = query.eq(columnaValor.column, columnaValor.value);
+    if (inFilter?.column && Array.isArray(inFilter.values)) query = query.in(inFilter.column, inFilter.values);
+    const { data, error } = await query;
+    if (error) return json({ error: error.message }, 400);
+
+    for (const row of data ?? []) {
+      const err = await verificarSedeFila(table, row as Record<string, unknown>);
+      if (err) return err;
+    }
+    return null;
+  }
+
   let body: { action?: string; payload?: Record<string, unknown> };
   try {
     body = await req.json();
@@ -157,6 +262,16 @@ Deno.serve(async (req) => {
         };
         if (!id) return json({ error: "Falta id" }, 400);
 
+        if (!esSuperAdmin) {
+          const { data: targetUser } = await admin.auth.admin.getUserById(id);
+          const targetRol = targetUser?.user?.app_metadata?.rol as string | undefined;
+          const targetTabla = targetRol ? TABLA_POR_ROL[targetRol] : undefined;
+          if (targetTabla) {
+            const errSede = await verificarSedeExistente(targetTabla, null, { column: "id", value: id }, null);
+            if (errSede) return errSede;
+          }
+        }
+
         const attrs: Record<string, string> = {};
         if (email !== undefined) attrs.email = email;
         if (password !== undefined) attrs.password = password;
@@ -182,7 +297,29 @@ Deno.serve(async (req) => {
         if (!table || !ALLOWED_TABLES.has(table)) {
           return json({ error: `tabla no permitida: ${table}` }, 400);
         }
-        const { data, error } = await admin.from(table).insert(values as never).select();
+
+        const filas = Array.isArray(values) ? values : [values];
+        const filasFinales = filas.map((f) => {
+          const fila = { ...(f as Record<string, unknown>) };
+          // Un admin normal no puede insertar (ni elegir) sede: siempre la suya.
+          // El super admin sí puede especificarla; si no la manda, cae en la propia.
+          // `profesores` se incluye aquí también (columna `id_sede` = sede de
+          // origen/registro) aunque no esté en TABLAS_SEDE_DIRECTA, porque esa
+          // tabla además admite grupos en otras sedes (ver verificarSedeFila).
+          if (TABLAS_SEDE_DIRECTA.has(table) || table === "profesores") {
+            if (!esSuperAdmin) fila.id_sede = callerSede;
+            else if (fila.id_sede === undefined || fila.id_sede === null) fila.id_sede = callerSede;
+          }
+          return fila;
+        });
+
+        for (const fila of filasFinales) {
+          const err = await verificarSedeFila(table, fila);
+          if (err) return err;
+        }
+
+        const valoresFinales = Array.isArray(values) ? filasFinales : filasFinales[0];
+        const { data, error } = await admin.from(table).insert(valoresFinales as never).select();
         if (error) return json({ error: error.message }, 400);
         return json({ data });
       }
@@ -204,7 +341,19 @@ Deno.serve(async (req) => {
           if (!m?.column) return json({ error: "match inválido: falta column" }, 400);
         }
 
-        let query = admin.from(table).update(values as never);
+        // 1) Verificar que TODAS las filas que este update va a tocar ya
+        //    pertenezcan a la sede del admin (o cualquiera si es super admin).
+        const errExistente = await verificarSedeExistente(table, matches, null, inFilter);
+        if (errExistente) return errExistente;
+
+        // 2) Si el update intenta mover la fila a otra sede, un admin normal
+        //    no puede — se le fuerza a que se quede en la suya.
+        const valoresFinales = { ...(values as Record<string, unknown>) };
+        if ((TABLAS_SEDE_DIRECTA.has(table) || table === "profesores") && !esSuperAdmin && valoresFinales.id_sede !== undefined) {
+          valoresFinales.id_sede = callerSede;
+        }
+
+        let query = admin.from(table).update(valoresFinales as never);
         for (const m of matches) query = query.eq(m.column, m.value);
         if (inFilter?.column && Array.isArray(inFilter.values)) {
           query = query.in(inFilter.column, inFilter.values);
@@ -225,6 +374,10 @@ Deno.serve(async (req) => {
           return json({ error: `tabla no permitida: ${table}` }, 400);
         }
         if (!column) return json({ error: "Falta column" }, 400);
+
+        const errExistente = await verificarSedeExistente(table, null, { column, value }, null);
+        if (errExistente) return errExistente;
+
         const { error } = await admin.from(table).delete().eq(column, value);
         if (error) return json({ error: error.message }, 400);
         return json({ ok: true });
@@ -245,6 +398,9 @@ Deno.serve(async (req) => {
         const tabla = rol ? TABLA_POR_ROL[rol] : undefined;
         if (!tabla) return json({ error: `rol desconocido: ${rol}` }, 400);
         if (!id || !fileBase64) return json({ error: "Falta id o archivo" }, 400);
+
+        const errSede = await verificarSedeExistente(tabla, null, { column: "id", value: id }, null);
+        if (errSede) return errSede;
 
         const ext = (fileName || "").split(".").pop() || "jpg";
         const path = `${rol}/${id}.${ext}`;
@@ -271,6 +427,9 @@ Deno.serve(async (req) => {
         const tabla = rol ? TABLA_POR_ROL[rol] : undefined;
         if (!tabla) return json({ error: `rol desconocido: ${rol}` }, 400);
         if (!id) return json({ error: "Falta id" }, 400);
+
+        const errSede = await verificarSedeExistente(tabla, null, { column: "id", value: id }, null);
+        if (errSede) return errSede;
 
         const { data: archivos, error: listError } = await admin.storage
           .from("avatars")

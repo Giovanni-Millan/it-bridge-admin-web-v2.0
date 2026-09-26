@@ -8,7 +8,7 @@
 // `returnTo` (via location.state) permite volver a donde se vino —
 // DetalleGrupo.jsx enlaza aquí para dar de alta un profesor sin perder el
 // grupo que se estaba armando, y espera regresar ahí, no siempre a /Grupos.
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../../components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
@@ -16,6 +16,8 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import Swal from "sweetalert2";
 import { createUser, insertRows } from "../../components/adminApi";
 import { mostrarError } from "../../utils/errorTraductor";
+import { getAdminSesion } from "../../components/adminSesion.js";
+import { supabase } from "../../components/supabaseClient.js";
 
 // Quita acentos y cualquier caracter que no sea letra, todo en minúsculas
 const normalizarTexto = (texto) =>
@@ -41,6 +43,8 @@ export default function InscribirProfesor() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnTo = location.state?.returnTo || "/Grupos";
+  const adminSesion = getAdminSesion();
+  const [sedes, setSedes] = useState([]);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -49,7 +53,14 @@ export default function InscribirProfesor() {
     correo: "",
     contraseña: "",
     telefono: "",
+    id_sede: adminSesion?.idSede ?? "",
   });
+
+  useEffect(() => {
+    if (adminSesion?.esSuperAdmin) {
+      supabase.from("sedes").select("*").order("nombre").then(({ data }) => setSedes(data || []));
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -84,6 +95,8 @@ export default function InscribirProfesor() {
       const userId = userData.user.id;
 
       /* 2. Insertar en tabla profesores */
+      // admin-api fuerza id_sede a la sede del admin si no es super admin,
+      // pero igual se manda explícito para que el super admin pueda elegir.
       const { error: profesorError } = await insertRows("profesores", [
         {
           id: userId,
@@ -92,6 +105,7 @@ export default function InscribirProfesor() {
           apellido_materno: formData.apellido_materno || null,
           correo: formData.correo,
           telefono: formData.telefono || null,
+          id_sede: adminSesion?.esSuperAdmin && formData.id_sede ? parseInt(formData.id_sede) : adminSesion?.idSede,
         },
       ]);
 
@@ -133,6 +147,28 @@ export default function InscribirProfesor() {
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sede</label>
+              {adminSesion?.esSuperAdmin ? (
+                <select
+                  name="id_sede"
+                  value={formData.id_sede}
+                  onChange={handleChange}
+                  required
+                  className="input bg-white"
+                >
+                  <option value="">Selecciona una sede...</option>
+                  {sedes.map((s) => (
+                    <option key={s.id_sede} value={s.id_sede}>{s.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="input bg-gray-100 text-gray-600 flex items-center">
+                  {adminSesion?.sedeNombre || "Tu sede"}
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input
                 type="text"

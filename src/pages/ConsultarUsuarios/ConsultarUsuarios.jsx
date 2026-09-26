@@ -19,6 +19,7 @@ import Swal from "sweetalert2";
 import { supabase } from "../../components/supabaseClient.js";
 import { listUsers, updateUserById } from "../../components/adminApi";
 import Avatar from "../../components/Avatar.jsx";
+import { getAdminSesion } from "../../components/adminSesion.js";
 
 const ROLES = [
   { key: "todos", label: "Todos" },
@@ -42,6 +43,8 @@ export default function ConsultarUsuarios() {
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [rolActivo, setRolActivo] = useState("todos");
+  const [sedeFiltro, setSedeFiltro] = useState("todas");
+  const adminSesion = getAdminSesion();
 
   useEffect(() => {
     cargarUsuarios();
@@ -52,11 +55,13 @@ export default function ConsultarUsuarios() {
 
     const [{ data: alumnos }, { data: profesores }, { data: psicologos }, { data: admins }] =
       await Promise.all([
-        supabase.from("alumnos").select("id, nombre, apellido_paterno, apellido_materno, correo, tipo, foto_url"),
-        supabase.from("profesores").select("id, nombre, apellido_paterno, apellido_materno, correo, telefono, foto_url"),
+        supabase.from("alumnos").select("id, nombre, apellido_paterno, apellido_materno, correo, tipo, foto_url, sedes(nombre)"),
+        supabase.from("profesores").select("id, nombre, apellido_paterno, apellido_materno, correo, telefono, foto_url, sedes(nombre)"),
         supabase.from("psicologos").select("id, nombre, apellido_paterno, apellido_materno, correo, telefono, foto_url"),
-        supabase.from("admins").select("id, nombre, apellido_paterno, apellido_materno, correo, foto_url"),
+        supabase.from("admins").select("id, nombre, apellido_paterno, apellido_materno, correo, foto_url, sedes(nombre)"),
       ]);
+    // RLS ya filtra estas 4 consultas por la sede del admin logueado (o
+    // trae todas si es super admin) — no hace falta ningún filtro extra aquí.
 
     // Estado de acceso (activo/baneado) viene de Auth, no de las tablas de rol.
     const bannedMap = {};
@@ -75,6 +80,7 @@ export default function ConsultarUsuarios() {
         rol,
         nombreCompleto: [u.nombre, u.apellido_paterno, u.apellido_materno].filter(Boolean).join(" "),
         activo: !bannedMap[u.id],
+        sedeNombre: u.sedes?.nombre ?? null,
       }));
 
     const todos = [
@@ -93,14 +99,20 @@ export default function ConsultarUsuarios() {
     setLoading(false);
   };
 
+  const sedesDisponibles = useMemo(
+    () => [...new Set(usuarios.map((u) => u.sedeNombre).filter(Boolean))],
+    [usuarios]
+  );
+
   const usuariosFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
     return usuarios.filter((u) => {
       if (rolActivo !== "todos" && u.rol !== rolActivo) return false;
+      if (sedeFiltro !== "todas" && u.sedeNombre !== sedeFiltro) return false;
       if (!texto) return true;
       return u.nombreCompleto.toLowerCase().includes(texto) || (u.correo || "").toLowerCase().includes(texto);
     });
-  }, [usuarios, busqueda, rolActivo]);
+  }, [usuarios, busqueda, rolActivo, sedeFiltro]);
 
   // Los alumnos tienen su propia pantalla de edición (ModificarInfoAlumno,
   // con más campos académicos: carrera, cuatrimestre, tipo, etc.); los
@@ -171,7 +183,7 @@ export default function ConsultarUsuarios() {
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {ROLES.map((r) => (
               <button
                 key={r.key}
@@ -185,6 +197,19 @@ export default function ConsultarUsuarios() {
                 {r.label}
               </button>
             ))}
+
+            {adminSesion?.esSuperAdmin && sedesDisponibles.length > 1 && (
+              <select
+                value={sedeFiltro}
+                onChange={(e) => setSedeFiltro(e.target.value)}
+                className="ml-auto px-3 py-1.5 border border-gray-200 rounded-full text-sm font-semibold text-purple-700 bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="todas">Todas las sedes</option>
+                {sedesDisponibles.map((nombre) => (
+                  <option key={nombre} value={nombre}>{nombre}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -203,6 +228,7 @@ export default function ConsultarUsuarios() {
                     <th className="py-3 px-6 text-left">Nombre</th>
                     <th className="py-3 px-4 text-left">Correo</th>
                     <th className="py-3 px-4 text-center">Rol</th>
+                    <th className="py-3 px-4 text-center">Sede</th>
                     <th className="py-3 px-4 text-center">Estado</th>
                     <th className="py-3 px-4 text-center">Acciones</th>
                   </tr>
@@ -227,6 +253,9 @@ export default function ConsultarUsuarios() {
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${BADGE_COLOR[u.rol]}`}>
                           {ROLES.find((r) => r.key === u.rol)?.label.replace(/s$/, "")}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-center text-gray-600 text-sm">
+                        {u.sedeNombre || "—"}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span

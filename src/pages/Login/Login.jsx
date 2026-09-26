@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import logo from './../../assets/logo.png';
 import { supabase } from '../../components/supabaseClient.js';
+import { cargarAdminSesion } from '../../components/adminSesion.js';
 import Swal from 'sweetalert2';
 
 export default function Login() {
@@ -47,6 +48,8 @@ export default function Login() {
       setIsLoading(false);
       return;
     }
+
+    await cargarAdminSesion();
 
     Swal.fire({
       title: 'Bienvenido al sistema',
