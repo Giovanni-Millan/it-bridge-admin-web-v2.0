@@ -20,6 +20,7 @@
 import {BrowserRouter as Router , Routes,Route} from 'react-router-dom'
 
 import "./App.css";
+import RutaProtegida from './components/RutaProtegida.jsx'
 
 import Dashboard from './pages/Dashboard/Dashboard'
 import CambiarPassword from "./pages/Dashboard/CambiarPassword";
@@ -171,6 +172,11 @@ function App() {
       <Routes>
         {/* <Route path='/' Component={Login}/>  */}
         <Route path='/' Component={Login}/>
+
+        {/* Todo lo de abajo requiere sesión real con rol "admin" — si no,
+            RutaProtegida regresa al Login en vez de dejar montar la pantalla. */}
+        <Route element={<RutaProtegida rol="admin" />}>
+
         <Route path='/dashboard' Component={Dashboard}/>
         <Route path="/CambiarPassword" Component={CambiarPassword} />
         <Route path="/Candados" Component={Candados} />
@@ -336,6 +342,9 @@ function App() {
 />
         <Route path='/SubirCalificacionesAlumno/:id' Component={SubirCalificaciones}/>
         <Route path='/ModificarCalificacion/:id' Component={ModificarCalificacion}/>
+
+        </Route>
+        {/* fin de las rutas protegidas */}
 
         <Route path='*' Component={NotFound}/>
 
