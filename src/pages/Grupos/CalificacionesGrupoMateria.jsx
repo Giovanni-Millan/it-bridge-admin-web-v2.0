@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { supabase } from "../../components/supabaseClient.js";
-import { updateRows, updateRowsWhere } from "../../components/adminApi";
+import { updateRows, updateRowsWhere, insertRows } from "../../components/adminApi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faLock, faLockOpen, faFilePdf, faFileExcel } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faLock, faLockOpen, faFilePdf, faFileExcel, faPen, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import jsPDF from "jspdf";
@@ -11,13 +11,16 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
 // Detalle de calificaciones de UNA materia de UN grupo, alumno por alumno.
-// El admin aquí NO captura calificaciones (no hay ningún input de nota) —
-// solo puede VER lo que el docente ya capturó, bloquear/desbloquear
-// (individual o "bloquear todas" de un golpe) y exportar a PDF/Excel. La
-// forma de esquema es distinta según el tipo de grupo: bachillerato/secundaria
-// traen 3 parciales por alumno (`calificaciones_parciales`) con su promedio
+// El admin puede VER lo que el docente ya capturó, bloquear/desbloquear
+// (individual o "bloquear todas" de un golpe), exportar a PDF/Excel, y
+// también CAPTURAR o EDITAR la calificación directamente — para cuando el
+// docente no puede hacerlo él mismo. La edición del admin ignora el candado
+// (bloqueada) a propósito: ese candado solo restringe al Portal del Docente,
+// nunca a este panel. La forma de esquema es distinta según el tipo de
+// grupo: bachillerato/secundaria traen 3 parciales por alumno
+// (`calificaciones_parciales`, requiere id_profesor) con su promedio
 // calculado en el cliente; universidad/autoplaneado trae una sola nota
-// (`calificaciones`).
+// (`calificaciones`, sin id_profesor).
 export default function CalificacionesGrupoMateria() {
   const { id_grupo, materia } = useParams();
   const materiaDecoded = decodeURIComponent(materia);
@@ -28,6 +31,10 @@ export default function CalificacionesGrupoMateria() {
   // Universidad/Autoplaneado: una fila por alumno con { clave, alumno, calificacion }
   const [filas, setFilas] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Profesor asignado a esta materia en este grupo (grupo_profesores). Solo
+  // se usa para capturar parciales nuevos en bachillerato: esa tabla exige
+  // id_profesor y aquí no hay uno "de la fila" como en `calificaciones`.
+  const [idProfesor, setIdProfesor] = useState(null);
 
   // El nombre quedó de cuando solo existía Bachillerato con 3 parciales;
   // Secundaria usa exactamente el mismo esquema (`calificaciones_parciales`),
@@ -43,6 +50,14 @@ export default function CalificacionesGrupoMateria() {
 
     const { data: grupoData } = await supabase.from("vista_grupos_resumen").select("*").eq("id_grupo", id_grupo).single();
     setGrupo(grupoData || null);
+
+    const { data: asignacion } = await supabase
+      .from("grupo_profesores")
+      .select("id_profesor")
+      .eq("id_grupo", id_grupo)
+      .eq("materia", materiaDecoded)
+      .maybeSingle();
+    setIdProfesor(asignacion?.id_profesor || null);
 
     if (grupoData?.tipo === "bachillerato" || grupoData?.tipo === "secundaria") {
       await fetchCalificacionesParciales();
@@ -142,6 +157,121 @@ export default function CalificacionesGrupoMateria() {
 
     if (esBachillerato) fetchCalificacionesParciales();
     else fetchCalificacionesUniversidad();
+  };
+
+  // Swal con input numérico 0-10, reusado para capturar y para editar (ya
+  // sea una calificación única o un parcial). Devuelve el número o null si
+  // se canceló.
+  const pedirCalificacion = async (valorActual) => {
+    const { value } = await Swal.fire({
+      title: valorActual !== null && valorActual !== undefined ? "Editar calificación" : "Capturar calificación",
+      text: "Como admin, esto se guarda sin importar si está bloqueada.",
+      input: "number",
+      inputValue: valorActual ?? "",
+      inputAttributes: { min: 0, max: 10, step: 0.1 },
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#7c3aed",
+      cancelButtonColor: "#6b7280",
+      inputValidator: (v) => {
+        if (v === "" || v === null || v === undefined) return "Ingresa un valor";
+        const n = Number(v);
+        if (Number.isNaN(n)) return "Debe ser un número";
+        if (n < 0 || n > 10) return "Debe estar entre 0 y 10";
+        return undefined;
+      },
+    });
+    if (value === undefined) return null;
+    return Number(value);
+  };
+
+  // ===== Universidad / Autoplaneado: capturar o editar `calificaciones` =====
+  const capturarCalificacion = async (fila) => {
+    const valor = await pedirCalificacion(null);
+    if (valor === null) return;
+
+    const { error } = await insertRows("calificaciones", {
+      correo: fila.alumno?.correo,
+      id_alumno: fila.alumno?.id,
+      materia: materiaDecoded,
+      calificacion: valor,
+      periodo_cuatrimestre: grupo?.periodo ?? null,
+      ano_cuatrimestre: grupo?.anio ?? null,
+      id_grupo: Number(id_grupo),
+      bloqueada: false,
+    });
+
+    if (error) {
+      Swal.fire("Error", "No se pudo capturar la calificación.", "error");
+      return;
+    }
+
+    Swal.fire({ icon: "success", title: "Calificación capturada", timer: 1300, showConfirmButton: false });
+    fetchCalificacionesUniversidad();
+  };
+
+  const editarCalificacion = async (registro) => {
+    const valor = await pedirCalificacion(registro.calificacion);
+    if (valor === null) return;
+
+    const { error } = await updateRows("calificaciones", "id", registro.id, { calificacion: valor });
+
+    if (error) {
+      Swal.fire("Error", "No se pudo actualizar la calificación.", "error");
+      return;
+    }
+
+    Swal.fire({ icon: "success", title: "Calificación actualizada", timer: 1300, showConfirmButton: false });
+    fetchCalificacionesUniversidad();
+  };
+
+  // ===== Bachillerato/Secundaria: capturar o editar `calificaciones_parciales` =====
+  const capturarParcial = async (fila, numParcial) => {
+    if (!idProfesor) {
+      Swal.fire(
+        "Sin profesor asignado",
+        "Esta materia no tiene un profesor asignado en este grupo todavía, así que no se puede capturar el parcial. Asígnalo primero en 'Detalle del Grupo'.",
+        "warning"
+      );
+      return;
+    }
+
+    const valor = await pedirCalificacion(null);
+    if (valor === null) return;
+
+    const { error } = await insertRows("calificaciones_parciales", {
+      id_grupo: Number(id_grupo),
+      id_alumno: fila.alumno?.id,
+      id_profesor: idProfesor,
+      materia: materiaDecoded,
+      parcial: numParcial,
+      calificacion: valor,
+      bloqueada: false,
+    });
+
+    if (error) {
+      Swal.fire("Error", "No se pudo capturar el parcial.", "error");
+      return;
+    }
+
+    Swal.fire({ icon: "success", title: "Parcial capturado", timer: 1300, showConfirmButton: false });
+    fetchCalificacionesParciales();
+  };
+
+  const editarParcial = async (registro) => {
+    const valor = await pedirCalificacion(registro.calificacion);
+    if (valor === null) return;
+
+    const { error } = await updateRows("calificaciones_parciales", "id", registro.id, { calificacion: valor });
+
+    if (error) {
+      Swal.fire("Error", "No se pudo actualizar el parcial.", "error");
+      return;
+    }
+
+    Swal.fire({ icon: "success", title: "Parcial actualizado", timer: 1300, showConfirmButton: false });
+    fetchCalificacionesParciales();
   };
 
   const bloquearTodas = async () => {
@@ -396,12 +526,32 @@ export default function CalificacionesGrupoMateria() {
     Swal.fire({ icon: "success", title: "Descarga completada", timer: 1500, showConfirmButton: false });
   };
 
-  const CeldaParcial = ({ parcial }) => {
-    if (!parcial) return <span className="text-gray-300">-</span>;
+  const CeldaParcial = ({ parcial, fila, numParcial }) => {
+    if (!parcial) {
+      return (
+        <button
+          onClick={() => capturarParcial(fila, numParcial)}
+          title={idProfesor ? "Capturar este parcial" : "No hay profesor asignado a esta materia en el grupo"}
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-600 hover:text-purple-800 transition"
+        >
+          <FontAwesomeIcon icon={faPlus} />
+          Capturar
+        </button>
+      );
+    }
 
     return (
       <div className="flex flex-col items-center gap-1">
-        <span className="font-semibold text-gray-900">{parcial.calificacion}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold text-gray-900">{parcial.calificacion}</span>
+          <button
+            onClick={() => editarParcial(parcial)}
+            title="Editar calificación (como admin)"
+            className="text-gray-400 hover:text-purple-600 transition"
+          >
+            <FontAwesomeIcon icon={faPen} className="text-[11px]" />
+          </button>
+        </div>
         {parcial.bloqueada ? (
           <button
             onClick={() => cambiarBloqueo(parcial, "calificaciones_parciales", false)}
@@ -425,12 +575,31 @@ export default function CalificacionesGrupoMateria() {
     );
   };
 
-  const CeldaCalificacion = ({ registro }) => {
-    if (!registro) return <span className="text-gray-300">Sin capturar</span>;
+  const CeldaCalificacion = ({ registro, fila }) => {
+    if (!registro) {
+      return (
+        <button
+          onClick={() => capturarCalificacion(fila)}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-800 transition"
+        >
+          <FontAwesomeIcon icon={faPlus} />
+          Capturar
+        </button>
+      );
+    }
 
     return (
       <div className="flex flex-col items-center gap-1">
-        <span className="font-semibold text-gray-900 text-lg">{registro.calificacion}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-gray-900 text-lg">{registro.calificacion}</span>
+          <button
+            onClick={() => editarCalificacion(registro)}
+            title="Editar calificación (como admin)"
+            className="text-gray-400 hover:text-purple-600 transition"
+          >
+            <FontAwesomeIcon icon={faPen} className="text-xs" />
+          </button>
+        </div>
         {registro.bloqueada ? (
           <button
             onClick={() => cambiarBloqueo(registro, "calificaciones", false)}
@@ -574,13 +743,13 @@ export default function CalificacionesGrupoMateria() {
                             {fila.alumno?.nombre} {fila.alumno?.apellido_paterno} {fila.alumno?.apellido_materno}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <CeldaParcial parcial={fila.parciales[1]} />
+                            <CeldaParcial parcial={fila.parciales[1]} fila={fila} numParcial={1} />
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <CeldaParcial parcial={fila.parciales[2]} />
+                            <CeldaParcial parcial={fila.parciales[2]} fila={fila} numParcial={2} />
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <CeldaParcial parcial={fila.parciales[3]} />
+                            <CeldaParcial parcial={fila.parciales[3]} fila={fila} numParcial={3} />
                           </td>
                           <td className="px-4 py-3 text-center font-bold text-purple-700">
                             {promedio !== null ? promedio.toFixed(1) : "-"}
@@ -613,15 +782,15 @@ export default function CalificacionesGrupoMateria() {
                       <div className="grid grid-cols-3 gap-2 text-center border-t border-gray-100 pt-3">
                         <div>
                           <p className="text-xs text-gray-400 mb-1">Parcial 1</p>
-                          <CeldaParcial parcial={fila.parciales[1]} />
+                          <CeldaParcial parcial={fila.parciales[1]} fila={fila} numParcial={1} />
                         </div>
                         <div>
                           <p className="text-xs text-gray-400 mb-1">Parcial 2</p>
-                          <CeldaParcial parcial={fila.parciales[2]} />
+                          <CeldaParcial parcial={fila.parciales[2]} fila={fila} numParcial={2} />
                         </div>
                         <div>
                           <p className="text-xs text-gray-400 mb-1">Parcial 3</p>
-                          <CeldaParcial parcial={fila.parciales[3]} />
+                          <CeldaParcial parcial={fila.parciales[3]} fila={fila} numParcial={3} />
                         </div>
                       </div>
                     </div>
@@ -657,7 +826,7 @@ export default function CalificacionesGrupoMateria() {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{fila.alumno?.correo}</td>
                         <td className="px-4 py-3 text-center">
-                          <CeldaCalificacion registro={fila.calificacion} />
+                          <CeldaCalificacion registro={fila.calificacion} fila={fila} />
                         </td>
                       </tr>
                     ))
@@ -680,7 +849,7 @@ export default function CalificacionesGrupoMateria() {
                     </p>
                     <p className="text-xs text-gray-500 mb-3">{fila.alumno?.correo}</p>
                     <div className="border-t border-gray-100 pt-3 flex justify-center">
-                      <CeldaCalificacion registro={fila.calificacion} />
+                      <CeldaCalificacion registro={fila.calificacion} fila={fila} />
                     </div>
                   </div>
                 ))
