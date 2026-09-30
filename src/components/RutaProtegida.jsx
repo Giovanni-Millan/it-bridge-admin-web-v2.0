@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { supabase } from "./supabaseClient.js";
+import Footer from "./Footer.jsx";
 
 export default function RutaProtegida({ rol }) {
   const [estado, setEstado] = useState("cargando"); // cargando | autorizado | rechazado
@@ -37,5 +38,13 @@ export default function RutaProtegida({ rol }) {
 
   if (estado === "cargando") return null;
   if (estado === "rechazado") return <Navigate to="/" replace />;
-  return <Outlet />;
+  // El Footer se monta aquí a propósito: este componente solo se renderiza
+  // una vez hay sesión válida, así que el Login (fuera de RutaProtegida)
+  // nunca lo ve.
+  return (
+    <>
+      <Outlet />
+      <Footer />
+    </>
+  );
 }
