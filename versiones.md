@@ -12,6 +12,13 @@ Cada versión se documenta aquí con lo que trae, de la más reciente a la más 
 
 ---
 
+## 1.3.1 — 2026-10-01
+
+Fix: el formulario "Inscribir Alumnos" (`/InscribirAlumnos`) no forzaba mayúsculas en nombre/apellido paterno/apellido materno — guardaba el texto tal cual lo escribiera el admin, rompiendo la convención del resto del sistema (alumnos siempre en mayúsculas en todas las pantallas que los listan).
+
+- Los 3 inputs ahora son controlados (`value={formData...}`) y `handleChange` fuerza `.toUpperCase()` en esos 3 campos antes de guardarlos en `formData` — se ve en mayúsculas mientras se escribe, y así es como queda en la BD.
+- No afecta la generación de correo/contraseña (`normalizarTexto` ya normalizaba a minúsculas internamente, independiente de cómo venga el input).
+
 ## 1.3.0 — 2026-09-30
 
 Pie de página del sistema, con la autoría, en los 4 portales web (admin, docente, alumno, psicólogo).

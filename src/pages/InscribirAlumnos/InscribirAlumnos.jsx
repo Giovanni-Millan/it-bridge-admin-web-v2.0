@@ -66,9 +66,16 @@ export default function InscribirAlumnos() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const actualizado = { ...formData, [name]: value };
+    // Convención del sistema: nombre/apellidos de alumno siempre en
+    // mayúsculas (igual que en todas las pantallas que los listan) — se
+    // fuerza aquí en vez de solo visualmente (CSS) para que lo que se
+    // guarda en la BD ya venga correcto, sin depender de que el admin
+    // escriba con mayúsculas.
+    const esNombreOApellido = ["nombre", "apellido_paterno", "apellido_materno"].includes(name);
+    const valorFinal = esNombreOApellido ? value.toUpperCase() : value;
+    const actualizado = { ...formData, [name]: valorFinal };
 
-    if (["nombre", "apellido_paterno", "apellido_materno"].includes(name)) {
+    if (esNombreOApellido) {
       actualizado.correo = generarCorreo(
         actualizado.nombre,
         actualizado.apellido_paterno,
@@ -234,11 +241,11 @@ export default function InscribirAlumnos() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-              <input type="text" name="nombre" placeholder="Nombre" onChange={handleChange} required className="input" />
+              <input type="text" name="nombre" placeholder="Nombre" value={formData.nombre} onChange={handleChange} required className="input uppercase" />
 
-              <input type="text" name="apellido_paterno" placeholder="Apellido paterno" onChange={handleChange} required className="input" />
+              <input type="text" name="apellido_paterno" placeholder="Apellido paterno" value={formData.apellido_paterno} onChange={handleChange} required className="input uppercase" />
 
-              <input type="text" name="apellido_materno" placeholder="Apellido materno" onChange={handleChange} required className="input" />
+              <input type="text" name="apellido_materno" placeholder="Apellido materno" value={formData.apellido_materno} onChange={handleChange} required className="input uppercase" />
 
             </div>
 
